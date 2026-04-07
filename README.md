@@ -1,3 +1,12 @@
+---
+title: LiteRT-LM
+emoji: 🚀
+colorFrom: blue
+colorTo: green
+sdk: static
+pinned: false
+---
+
 # LiteRT-LM
 
 LiteRT-LM is Google's production-ready, high-performance, open-source inference
