@@ -672,18 +672,11 @@ def verify_image_vlm(image_url: str, scene_desc: str, char_tags: str) -> Dict:
     - 손가락 개수, 눈/코/입 배치, 캐릭터 일관성, 명백한 오류 체크
     - 90점 미만이면 재생성 대상
     """
-    system = ("당신은 이미지 품질 검증 전문가입니다. JSON 객체만 출력하세요. 설명/분석/생각 과정 출력 절대 금지. 첫 글자가 반드시 { 여야 합니다.\n"
-               "★ 최우선 검사: 손가락 개수를 반드시 세세요. 각 손에 손가락이 정확히 5개인지 확인. 6개 이상이거나 4개 이하이면 anatomy_score를 30 이하로.\n"
-               "★ 손가락이 뭉개지거나 비정상적으로 긴/짧은 경우, 손가락이 서로 붙어있는 경우도 anatomy 감점.\n"
-               "★ 눈/코/입 위치가 비정상이면 anatomy_score 50 이하.\n"
-               "★ 이미지가 비어있거나 렌더링 실패(단색, 깨진 이미지)이면 overall_score를 0으로.\n"
-               "평가 기준: anatomy(해부학 손가락5개 엄격), consistency(캐릭터 일치), artifacts(깨진 부분), composition(구도), child_safety(아동적합).\n"
-               "overall_score = min(anatomy_score, average(consistency, artifacts, composition, child_safety)). anatomy가 나쁘면 전체가 나빠야 합니다.\n"
-               "JSON: {\"anatomy_score\":0-100,\"consistency_score\":0-100,\"artifact_score\":0-100,\"composition_score\":0-100,\"child_safety_score\":0-100,\"overall_score\":0-100,\"critical_issues\":[],\"minor_issues\":[]}")
+    system = "이미지 검증 전문가. JSON만 출력. 분석/설명/생각 금지. {로 시작. 손가락 5개 아니면 anatomy_score 30이하. overall_score=min(anatomy_score,avg(나머지)). JSON: {\"anatomy_score\":0-100,\"consistency_score\":0-100,\"artifact_score\":0-100,\"composition_score\":0-100,\"child_safety_score\":0-100,\"overall_score\":0-100,\"critical_issues\":[],\"minor_issues\":[]}"
 
     user_content = [
         {"type": "image_url", "image_url": {"url": image_url}},
-        {"type": "text", "text": f"이 아동 동화 삽화를 엄격하게 평가하세요.\n\n[장면 설명] {scene_desc}\n[캐릭터 외모] {char_tags}\n\n★ 필수 체크리스트:\n1. 각 손의 손가락 개수를 정확히 세세요 (5개가 아니면 critical_issues에 추가)\n2. 손가락이 뭉개지거나 비정상적 형태인지 확인\n3. 얼굴 비율이 정상인지 확인 (눈/코/입 위치)\n4. 이미지가 비어있거나 렌더링 실패인지 확인\n5. 캐릭터 외모가 설명과 일치하는지 확인\n\n위 체크리스트 기반으로 JSON 평가하세요. 손가락 이상이 있으면 반드시 anatomy_score 30 이하로 평가하세요."}
+        {"type": "text", "text": f"평가. 캐릭터: {char_tags[:200]}\n손가락5개확인, 얼굴정상확인. JSON만 출력."}
     ]
     
     try:
@@ -701,9 +694,23 @@ def verify_image_vlm(image_url: str, scene_desc: str, char_tags: str) -> Dict:
                 {"role": "user", "content": user_content}
             ]
         }
-        resp = requests.post(FIREWORKS_URL, headers=headers, json=payload, timeout=60)
+        resp = requests.post(FIREWORKS_URL, headers=headers, json=payload, timeout=90)
         resp.raise_for_status()
         content = resp.json()["choices"][0]["message"]["content"]
+
+        # ★ VLM reasoning 오염 제거 — Kimi-K2.5가 분석 텍스트를 출력하는 경우 JSON만 추출
+        # 패턴 1: "anatomy_score" 키를 포함하는 JSON 블록 찾기
+        json_match = re.search(r'\{[^{}]*"anatomy_score"\s*:\s*\d+[^{}]*\}', content)
+        if json_match:
+            content = json_match.group(0)
+            logger.info(f"  🔧 VLM reasoning 제거 → JSON 추출 성공")
+        else:
+            # 패턴 2: "overall_score" 키를 포함하는 JSON 블록 찾기
+            json_match2 = re.search(r'\{[^{}]*"overall_score"\s*:\s*\d+[^{}]*\}', content)
+            if json_match2:
+                content = json_match2.group(0)
+                logger.info(f"  🔧 VLM reasoning 제거 → JSON 추출 성공 (overall_score)")
+
         result = safe_json_parse(content)
         if result:
             logger.info(f"  🔍 VLM 검증: {result.get('overall_score', 0)}점 | pass={result.get('pass', False)}")
@@ -754,11 +761,16 @@ def step3_generate_page_image(story_id, page_number, max_regen=3):
     
     url = ""
     vlm_result = {}
-    
+    original_base_prompt = base_prompt  # ★ 원본 보존 — 스타일 드리프트 방지
+    avoid_text = ""
+
     for attempt in range(max_regen + 1):
+        # ★ 매 시도마다 원본 프롬프트 기반으로 생성 (누적 방지)
+        current_prompt = original_base_prompt + avoid_text
+
         # 이미지 생성
         if page_number == 1 and not ref_urls and not user_ref:
-            url = generate_image_fal(base_prompt)
+            url = generate_image_fal(current_prompt)
         else:
             # edit 참조 목록 구성: 사용자 ref(최우선) + 이전 이미지(최근 2개)
             edit_refs = []
@@ -775,7 +787,7 @@ def step3_generate_page_image(story_id, page_number, max_regen=3):
             )
             url = edit_image_fal(edit_prompt, edit_refs[:3])
             if not url:
-                url = generate_image_fal(base_prompt)
+                url = generate_image_fal(current_prompt)
         
         if not url:
             logger.warning(f"  🔄 P{page_number} 이미지 생성 실패 — 재시도 {attempt+2}/{max_regen+1}")
@@ -799,7 +811,7 @@ def step3_generate_page_image(story_id, page_number, max_regen=3):
             # 재생성 — critical issues를 네거티브 프롬프트로 반영
             issues_str = ", ".join(critical[:3]) if critical else "quality issues"
             logger.warning(f"  🔄 P{page_number} VLM FAIL ({vlm_score}점) — 재생성 {attempt+2}/{max_regen+1}: {issues_str}")
-            base_prompt += f" AVOID these issues: {issues_str}. Ensure correct anatomy, exactly 5 fingers per hand."
+            avoid_text = f" AVOID: {issues_str}. Ensure correct anatomy, exactly 5 fingers per hand."
             time.sleep(1)
         else:
             logger.warning(f"  ⚠️ P{page_number} VLM 최종 {vlm_score}점 — 최선 결과 사용")
