@@ -31,6 +31,10 @@ FIREWORKS_MODEL = "accounts/fireworks/models/kimi-k2p5"
 FAL_KEY = os.getenv("FAL_KEY", "")
 DB_PATH = "fairytale.db"
 
+# HF 데이터셋 — PDF 영구 저장
+HF_BOOK_REPO = "Heartsync/KID-books"
+HF_TOKEN = os.getenv("HF_TOKEN", "")
+
 # ═══════════════════════════════════════════
 # Emergence Seed
 # ═══════════════════════════════════════════
@@ -938,10 +942,23 @@ def build_viewer_html(story_id):
 
 
 # ═══════════════════════════════════════════
-# 3D Flipbook Viewer — CSS + JS 플립북
+# 3D Flipbook Viewer — 단면/양면 모드 지원
 # ═══════════════════════════════════════════
+def _fb_page_html(p):
+    """플립북 페이지 하나의 HTML 생성"""
+    if not p:
+        return '<div style="height:100%;background:#FFFBF5;"></div>'
+    img = f"<img src='{p['image_url']}' style='width:100%;height:62%;object-fit:cover;'>" if p["image_url"] else "<div style='width:100%;height:62%;background:linear-gradient(135deg,#f0e6d3,#e8d5b8);display:flex;align-items:center;justify-content:center;font-size:32px;'>🎨</div>"
+    return f'''<div style="height:100%;display:flex;flex-direction:column;background:#FFFBF5;overflow:hidden;">
+        {img}
+        <div style="flex:1;padding:8px 12px;overflow:hidden;">
+            <div style="font-size:8px;color:#8B6914;font-weight:700;margin-bottom:3px;">P{p["page_number"]}</div>
+            <div style="font-family:Georgia,serif;font-size:11.5px;line-height:1.65;color:#3D2B1F;">{p["text_ko"]}</div>
+        </div>
+    </div>'''
+
 def build_flipbook_html(story_id):
-    """3D CSS 플립북 뷰어 HTML 생성"""
+    """3D CSS 플립북 — 단면/양면 모드 전환 지원"""
     with get_db() as conn:
         story = conn.execute("SELECT * FROM stories WHERE story_id=?", (story_id,)).fetchone()
         pages = conn.execute("SELECT * FROM pages WHERE story_id=? ORDER BY page_number", (story_id,)).fetchall()
@@ -949,161 +966,144 @@ def build_flipbook_html(story_id):
     if not story:
         return "<div style='text-align:center;padding:40px;color:#999;'>스토리를 찾을 수 없습니다.</div>"
 
-    # 시트 데이터 구성: 표지 + 15페이지 + 뒷표지
-    sheets_data = []
+    # 개별 페이지 콘텐츠 배열: 표지, P1~P15, 뒷표지
+    all_pages = []
 
-    # 표지 (시트 0)
+    # 표지
     cover_img = pages[0]["image_url"] if pages and pages[0]["image_url"] else ""
-    cover_front = f'''<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;
-        background:linear-gradient(135deg,#FFF8EE,#FFF0D6);padding:20px;box-sizing:border-box;">
-        <div style="font-size:11px;color:#8B6914;letter-spacing:3px;margin-bottom:8px;">AXIS Emergence Engine</div>
-        <h1 style="font-family:Georgia,serif;font-size:22px;color:#3D2B1F;margin:0 0 8px;text-align:center;line-height:1.3;">{story["title"]}</h1>
-        <p style="font-size:12px;color:#8B7355;margin:0 0 12px;text-align:center;">{story["theme"]}</p>
-        {"<img src='" + cover_img + "' style='max-width:80%;max-height:55%;border-radius:8px;object-fit:cover;box-shadow:0 2px 10px rgba(0,0,0,0.1);'>" if cover_img else ""}
-        <p style="font-size:11px;color:#A0896A;margin-top:auto;">{story["child_name"]}의 이야기</p>
-    </div>'''
+    all_pages.append(f'''<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;
+        background:linear-gradient(135deg,#FFF8EE,#FFF0D6);padding:16px;box-sizing:border-box;">
+        <div style="font-size:10px;color:#8B6914;letter-spacing:3px;margin-bottom:6px;">AXIS Emergence Engine</div>
+        <h1 style="font-family:Georgia,serif;font-size:20px;color:#3D2B1F;margin:0 0 6px;text-align:center;line-height:1.3;">{story["title"]}</h1>
+        <p style="font-size:11px;color:#8B7355;margin:0 0 10px;text-align:center;">{story["theme"]}</p>
+        {"<img src='" + cover_img + "' style='max-width:85%;max-height:50%;border-radius:6px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,0.1);'>" if cover_img else ""}
+        <p style="font-size:10px;color:#A0896A;margin-top:auto;">{story["child_name"]}의 이야기</p>
+    </div>''')
 
-    # 표지 뒷면 (빈 페이지)
-    cover_back = '<div style="height:100%;background:#FFFBF5;"></div>'
-    sheets_data.append((cover_front, cover_back))
-
-    # 본문 페이지들 (시트 1~8: 2페이지씩 묶음)
-    for i in range(0, len(pages), 2):
-        p1 = pages[i] if i < len(pages) else None
-        p2 = pages[i + 1] if i + 1 < len(pages) else None
-
-        # Front: 첫 번째 페이지
-        if p1:
-            img1 = f"<img src='{p1['image_url']}' style='width:100%;height:60%;object-fit:cover;border-radius:6px 6px 0 0;'>" if p1["image_url"] else "<div style='width:100%;height:60%;background:linear-gradient(135deg,#f0e6d3,#e8d5b8);display:flex;align-items:center;justify-content:center;border-radius:6px 6px 0 0;font-size:32px;'>🎨</div>"
-            front = f'''<div style="height:100%;display:flex;flex-direction:column;background:#FFFBF5;overflow:hidden;">
-                {img1}
-                <div style="flex:1;padding:10px 14px;overflow:hidden;">
-                    <div style="font-size:9px;color:#8B6914;font-weight:700;margin-bottom:4px;">P{p1["page_number"]}/15</div>
-                    <div style="font-family:Georgia,serif;font-size:12px;line-height:1.7;color:#3D2B1F;">{p1["text_ko"][:200]}</div>
-                </div>
-            </div>'''
-        else:
-            front = '<div style="height:100%;background:#FFFBF5;"></div>'
-
-        # Back: 두 번째 페이지
-        if p2:
-            img2 = f"<img src='{p2['image_url']}' style='width:100%;height:60%;object-fit:cover;border-radius:6px 6px 0 0;'>" if p2["image_url"] else "<div style='width:100%;height:60%;background:linear-gradient(135deg,#f0e6d3,#e8d5b8);display:flex;align-items:center;justify-content:center;border-radius:6px 6px 0 0;font-size:32px;'>🎨</div>"
-            back = f'''<div style="height:100%;display:flex;flex-direction:column;background:#FFFBF5;overflow:hidden;">
-                {img2}
-                <div style="flex:1;padding:10px 14px;overflow:hidden;">
-                    <div style="font-size:9px;color:#8B6914;font-weight:700;margin-bottom:4px;">P{p2["page_number"]}/15</div>
-                    <div style="font-family:Georgia,serif;font-size:12px;line-height:1.7;color:#3D2B1F;">{p2["text_ko"][:200]}</div>
-                </div>
-            </div>'''
-        else:
-            back = '<div style="height:100%;background:#FFFBF5;"></div>'
-
-        sheets_data.append((front, back))
+    # 본문 15페이지
+    for p in pages:
+        all_pages.append(_fb_page_html(p))
 
     # 뒷표지
-    back_cover_front = f'''<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;
-        background:linear-gradient(135deg,#FFF0D6,#FFF8EE);padding:20px;box-sizing:border-box;">
-        <div style="font-size:48px;margin-bottom:16px;">📖</div>
-        <p style="font-family:Georgia,serif;font-size:14px;color:#3D2B1F;text-align:center;line-height:1.8;margin:0 0 16px;">{story["moral"]}</p>
-        <div style="font-size:10px;color:#A0896A;text-align:center;">— 끝 —</div>
-        <div style="margin-top:auto;font-size:9px;color:#C0A87A;text-align:center;">AXIS Engine | Grok Imagine & Kimi-K2.5</div>
-    </div>'''
-    back_cover_back = '<div style="height:100%;background:linear-gradient(135deg,#3D2B1F,#5C4A2A);border-radius:0 4px 4px 0;"></div>'
-    sheets_data.append((back_cover_front, back_cover_back))
+    all_pages.append(f'''<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;
+        background:linear-gradient(135deg,#FFF0D6,#FFF8EE);padding:16px;box-sizing:border-box;">
+        <div style="font-size:40px;margin-bottom:12px;">📖</div>
+        <p style="font-family:Georgia,serif;font-size:13px;color:#3D2B1F;text-align:center;line-height:1.8;margin:0 0 12px;">{story["moral"]}</p>
+        <div style="font-size:9px;color:#A0896A;">— 끝 —</div>
+        <div style="margin-top:auto;font-size:8px;color:#C0A87A;">AXIS Engine | Grok Imagine & Kimi-K2.5</div>
+    </div>''')
 
-    total = len(sheets_data)
+    total_pages = len(all_pages)
 
-    # 시트 HTML 생성
+    # 시트 생성: 각 시트는 front/back, 1페이지 = 1시트의 front
     sheets_html = ""
-    for idx, (front, back) in enumerate(sheets_data):
-        z = total - idx
-        sheets_html += f'''<div class="fb-sheet" data-index="{idx}" style="z-index:{z};">
+    for idx in range(total_pages):
+        z = total_pages - idx
+        front = all_pages[idx]
+        back = '<div style="height:100%;background:#FFFBF5;"></div>'
+        sheets_html += f'''<div class="fb-sheet" data-idx="{idx}" style="z-index:{z};">
             <div class="fb-front">{front}</div>
             <div class="fb-back">{back}</div>
         </div>\n'''
 
     return f'''
-    <div id="fb-wrap" style="max-width:700px;margin:0 auto;font-family:'Noto Sans KR',sans-serif;user-select:none;">
+    <div id="fb-wrap" style="max-width:750px;margin:0 auto;font-family:'Noto Sans KR',sans-serif;user-select:none;">
         <style>
+            .fb-mode-bar {{
+                display:flex;justify-content:center;gap:8px;margin-bottom:10px;
+            }}
+            .fb-mode-btn {{
+                padding:6px 16px;border-radius:16px;border:1.5px solid #8B6914;
+                background:white;color:#8B6914;font-size:12px;font-weight:600;cursor:pointer;
+                transition:all 0.2s;
+            }}
+            .fb-mode-btn.active {{
+                background:#8B6914;color:white;
+            }}
             .fb-scene {{
-                perspective: 2000px;
-                width: 340px; height: 480px;
-                margin: 0 auto;
-                position: relative;
+                perspective:2000px;
+                margin:0 auto;position:relative;
+                transition:width 0.4s,height 0.4s;
             }}
+            .fb-scene.single {{ width:320px;height:440px; }}
+            .fb-scene.spread {{ width:640px;height:440px; }}
             .fb-sheet {{
-                position: absolute; width: 100%; height: 100%;
-                transform-style: preserve-3d;
-                transform-origin: left center;
-                transition: transform 0.8s cubic-bezier(0.645,0.045,0.355,1.000);
-                cursor: pointer;
-                border-radius: 0 4px 4px 0;
-                box-shadow: 2px 2px 8px rgba(0,0,0,0.06);
+                position:absolute;width:320px;height:100%;
+                transform-style:preserve-3d;
+                transform-origin:left center;
+                transition:transform 0.8s cubic-bezier(0.645,0.045,0.355,1.000);
+                cursor:pointer;
             }}
-            .fb-sheet.flipped {{ transform: rotateY(-180deg); }}
-            .fb-front, .fb-back {{
-                position: absolute; width: 100%; height: 100%;
-                backface-visibility: hidden;
-                -webkit-backface-visibility: hidden;
-                overflow: hidden;
-                border-radius: 0 4px 4px 0;
-                border: 1px solid #E8D5B8;
+            .fb-scene.single .fb-sheet {{ width:100%; }}
+            .fb-scene.spread .fb-sheet {{
+                width:320px;left:320px;
             }}
-            .fb-back {{
-                transform: rotateY(180deg);
+            .fb-sheet.flipped {{ transform:rotateY(-180deg); }}
+            .fb-front,.fb-back {{
+                position:absolute;width:100%;height:100%;
+                backface-visibility:hidden;-webkit-backface-visibility:hidden;
+                overflow:hidden;border:1px solid #E8D5B8;background:#FFFBF5;
             }}
-            .fb-front::after, .fb-back::after {{
-                content: '';
-                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-                background: linear-gradient(to right, rgba(0,0,0,0.06) 0%, transparent 8%, transparent 92%, rgba(0,0,0,0.03) 100%);
-                pointer-events: none;
+            .fb-back {{ transform:rotateY(180deg); }}
+            .fb-front::after,.fb-back::after {{
+                content:'';position:absolute;top:0;left:0;right:0;bottom:0;
+                background:linear-gradient(to right,rgba(0,0,0,0.05) 0%,transparent 6%,transparent 94%,rgba(0,0,0,0.02) 100%);
+                pointer-events:none;
             }}
+            .fb-left-page {{
+                position:absolute;left:0;top:0;width:320px;height:100%;
+                background:#FFFBF5;border:1px solid #E8D5B8;overflow:hidden;
+                display:none;
+            }}
+            .fb-scene.spread .fb-left-page {{ display:block; }}
+            .fb-spine {{
+                position:absolute;top:0;bottom:0;width:4px;
+                background:linear-gradient(to right,#5C4A2A,#8B6914,#5C4A2A);
+                z-index:9999;box-shadow:0 0 4px rgba(0,0,0,0.3);
+            }}
+            .fb-scene.single .fb-spine {{ left:-2px;border-radius:2px 0 0 2px; }}
+            .fb-scene.spread .fb-spine {{ left:318px; }}
             .fb-nav {{
-                display: flex; justify-content: center; align-items: center;
-                gap: 16px; margin-top: 16px;
+                display:flex;justify-content:center;align-items:center;
+                gap:14px;margin-top:14px;
             }}
             .fb-btn {{
-                background: #8B6914; color: white; border: none;
-                padding: 8px 20px; border-radius: 20px; cursor: pointer;
-                font-size: 13px; font-weight: 600;
-                transition: background 0.2s;
+                background:#8B6914;color:white;border:none;
+                padding:7px 18px;border-radius:18px;cursor:pointer;
+                font-size:12px;font-weight:600;transition:background 0.2s;
             }}
-            .fb-btn:hover {{ background: #6B5210; }}
-            .fb-btn:disabled {{ background: #C0A87A; cursor: default; }}
-            .fb-info {{
-                text-align: center; margin-top: 8px;
-                font-size: 12px; color: #8B7355;
-            }}
-            .fb-spine {{
-                position: absolute; left: -3px; top: 0; bottom: 0; width: 6px;
-                background: linear-gradient(to right, #5C4A2A, #8B6914, #5C4A2A);
-                border-radius: 3px 0 0 3px;
-                box-shadow: -1px 0 3px rgba(0,0,0,0.2);
-                z-index: 9999;
-            }}
+            .fb-btn:hover {{ background:#6B5210; }}
+            .fb-btn:disabled {{ background:#C0A87A;cursor:default; }}
+            .fb-info {{ font-size:12px;color:#8B7355; }}
         </style>
 
-        <div style="text-align:center;margin-bottom:12px;">
-            <span style="font-size:12px;color:#8B6914;font-weight:600;">📕 3D 플립북</span>
-            <span style="font-size:11px;color:#A0896A;margin-left:8px;">클릭 또는 ← → 키로 넘기세요</span>
+        <div class="fb-mode-bar">
+            <button class="fb-mode-btn active" id="fb-mode-single" onclick="fbSetMode('single')">📄 단면 보기</button>
+            <button class="fb-mode-btn" id="fb-mode-spread" onclick="fbSetMode('spread')">📖 양면 펼침</button>
         </div>
 
-        <div class="fb-scene" id="fb-scene">
+        <div class="fb-scene single" id="fb-scene">
             <div class="fb-spine"></div>
+            <div class="fb-left-page" id="fb-left"></div>
             {sheets_html}
         </div>
 
         <div class="fb-nav">
             <button class="fb-btn" id="fb-prev" onclick="fbPrev()">◀ 이전</button>
-            <span class="fb-info" id="fb-info">1 / {total}</span>
+            <span class="fb-info" id="fb-info">1 / {total_pages}</span>
             <button class="fb-btn" id="fb-next" onclick="fbNext()">다음 ▶</button>
         </div>
 
         <script>
         (function() {{
+            const scene = document.getElementById('fb-scene');
             const sheets = document.querySelectorAll('#fb-scene .fb-sheet');
-            const total = {total};
+            const leftPage = document.getElementById('fb-left');
+            const allContent = [];
+            sheets.forEach(s => allContent.push(s.querySelector('.fb-front').innerHTML));
+            const total = {total_pages};
             let current = 0;
+            let mode = 'single';
 
             function update() {{
                 sheets.forEach((s, i) => {{
@@ -1115,6 +1115,14 @@ def build_flipbook_html(story_id):
                         s.style.zIndex = total - i;
                     }}
                 }});
+                // 양면 모드: 왼쪽 페이지 업데이트
+                if (mode === 'spread' && current > 0) {{
+                    leftPage.innerHTML = allContent[current - 1];
+                    leftPage.style.display = 'block';
+                }} else if (mode === 'spread' && current === 0) {{
+                    leftPage.innerHTML = '';
+                    leftPage.style.display = 'none';
+                }}
                 document.getElementById('fb-info').textContent = (current + 1) + ' / ' + total;
                 document.getElementById('fb-prev').disabled = (current === 0);
                 document.getElementById('fb-next').disabled = (current >= total - 1);
@@ -1125,6 +1133,15 @@ def build_flipbook_html(story_id):
             }};
             window.fbPrev = function() {{
                 if (current > 0) {{ current--; update(); }}
+            }};
+
+            window.fbSetMode = function(m) {{
+                mode = m;
+                scene.className = 'fb-scene ' + m;
+                document.getElementById('fb-mode-single').classList.toggle('active', m === 'single');
+                document.getElementById('fb-mode-spread').classList.toggle('active', m === 'spread');
+                if (m === 'single') {{ leftPage.style.display = 'none'; }}
+                update();
             }};
 
             sheets.forEach((s, i) => {{
@@ -1146,19 +1163,30 @@ def build_flipbook_html(story_id):
 
 
 # ═══════════════════════════════════════════
-# PDF Generation — ReportLab
+# PDF Generation — 동화책 스타일 (210x210mm 정사각형)
 # ═══════════════════════════════════════════
+BOOK_SIZE = (210 * 2.8346, 210 * 2.8346)  # 210mm x 210mm in points
+
+def _pdf_load_image(url, timeout=15):
+    """FAL URL에서 이미지를 로드하여 ImageReader 반환"""
+    from reportlab.lib.utils import ImageReader
+    from io import BytesIO
+    try:
+        resp = requests.get(url, timeout=timeout)
+        if resp.status_code == 200:
+            return ImageReader(BytesIO(resp.content))
+    except Exception as e:
+        logger.warning(f"PDF 이미지 로드 실패: {e}")
+    return None
+
 def generate_pdf(story_id):
-    """동화 PDF 생성 — 한국어 지원"""
-    from reportlab.lib.pagesizes import A4
+    """동화책 스타일 PDF 생성 — 210x210mm 정사각형, 한국어"""
     from reportlab.lib.units import mm
     from reportlab.pdfgen import canvas
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-    from io import BytesIO
     import tempfile
 
-    # 한국어 CID 폰트 등록 (별도 ttf 파일 불필요)
     try:
         pdfmetrics.registerFont(UnicodeCIDFont('HYSMyeongJo-Medium'))
         KR_FONT = 'HYSMyeongJo-Medium'
@@ -1172,120 +1200,234 @@ def generate_pdf(story_id):
     if not story:
         return None
 
-    w, h = A4
+    w, h = BOOK_SIZE
     pdf_path = os.path.join(tempfile.gettempdir(), f"fairytale_{story_id}.pdf")
-    c = canvas.Canvas(pdf_path, pagesize=A4)
+    c = canvas.Canvas(pdf_path, pagesize=BOOK_SIZE)
 
-    # === 표지 ===
-    c.setFillColorRGB(0.24, 0.17, 0.12)
+    # ── 표지 ──
+    # 배경
+    c.setFillColorRGB(0.99, 0.96, 0.90)
     c.rect(0, 0, w, h, fill=True)
-    c.setFillColorRGB(1, 0.97, 0.93)
-    c.rect(15*mm, 15*mm, w - 30*mm, h - 30*mm, fill=True)
 
-    c.setFont(KR_FONT, 24)
-    c.setFillColorRGB(0.24, 0.17, 0.12)
-    # 제목 — 중앙 정렬
-    title = story["title"] or "동화"
-    title_w = c.stringWidth(title, KR_FONT, 24)
-    c.drawString((w - title_w) / 2, h - 80*mm, title)
-
-    c.setFont(KR_FONT, 12)
-    c.setFillColorRGB(0.55, 0.45, 0.33)
-    theme = story["theme"] or ""
-    theme_w = c.stringWidth(theme, KR_FONT, 12)
-    c.drawString((w - theme_w) / 2, h - 95*mm, theme)
-
-    # 표지 이미지
+    # 표지 이미지 (풀블리드)
     if pages and pages[0]["image_url"]:
-        try:
-            img_resp = requests.get(pages[0]["image_url"], timeout=15)
-            if img_resp.status_code == 200:
-                from reportlab.lib.utils import ImageReader
-                img_io = BytesIO(img_resp.content)
-                img_reader = ImageReader(img_io)
-                iw, ih = img_reader.getSize()
-                max_w = w - 60*mm
-                max_h = 100*mm
-                scale = min(max_w / iw, max_h / ih)
-                dw, dh = iw * scale, ih * scale
-                c.drawImage(img_reader, (w - dw) / 2, 40*mm, dw, dh, preserveAspectRatio=True, mask='auto')
-        except Exception as e:
-            logger.warning(f"PDF 표지 이미지 로드 실패: {e}")
+        img = _pdf_load_image(pages[0]["image_url"])
+        if img:
+            c.drawImage(img, 0, h * 0.25, w, h * 0.75, preserveAspectRatio=True, anchor='c', mask='auto')
 
+    # 하단 제목 영역 (반투명 배경 효과)
+    c.setFillColorRGB(1, 0.98, 0.94, 0.85)
+    c.rect(0, 0, w, h * 0.30, fill=True)
+
+    # 제목
+    title = story["title"] or "동화"
+    c.setFont(KR_FONT, 26)
+    c.setFillColorRGB(0.24, 0.17, 0.12)
+    title_w = c.stringWidth(title, KR_FONT, 26)
+    c.drawString((w - title_w) / 2, h * 0.18, title)
+
+    # 부제
+    theme = story["theme"] or ""
+    c.setFont(KR_FONT, 11)
+    c.setFillColorRGB(0.55, 0.45, 0.33)
+    theme_w = c.stringWidth(theme, KR_FONT, 11)
+    c.drawString((w - theme_w) / 2, h * 0.12, theme)
+
+    # 저자
     c.setFont(KR_FONT, 10)
-    c.drawCentredString(w / 2, 25*mm, f"{story['child_name']}의 이야기")
+    c.setFillColorRGB(0.63, 0.52, 0.37)
+    author = f"{story['child_name']}의 이야기"
+    aw = c.stringWidth(author, KR_FONT, 10)
+    c.drawString((w - aw) / 2, h * 0.06, author)
 
     c.showPage()
 
-    # === 본문 페이지 ===
+    # ── 본문 15페이지 ──
     for p in pages:
-        # 배경
+        # 크림색 배경
         c.setFillColorRGB(1, 0.99, 0.96)
         c.rect(0, 0, w, h, fill=True)
 
-        y_cursor = h - 15*mm
-
-        # 페이지 번호
-        c.setFont(KR_FONT, 8)
-        c.setFillColorRGB(0.55, 0.41, 0.08)
-        c.drawString(15*mm, y_cursor, f"P{p['page_number']}/15")
-        y_cursor -= 5*mm
-
-        # 이미지
+        # 이미지 (상단 65%)
         if p["image_url"]:
-            try:
-                img_resp = requests.get(p["image_url"], timeout=15)
-                if img_resp.status_code == 200:
-                    from reportlab.lib.utils import ImageReader
-                    img_io = BytesIO(img_resp.content)
-                    img_reader = ImageReader(img_io)
-                    iw, ih = img_reader.getSize()
-                    max_w = w - 30*mm
-                    max_h = 160*mm
-                    scale = min(max_w / iw, max_h / ih)
-                    dw, dh = iw * scale, ih * scale
-                    c.drawImage(img_reader, (w - dw) / 2, y_cursor - dh, dw, dh, preserveAspectRatio=True, mask='auto')
-                    y_cursor -= (dh + 8*mm)
-            except Exception as e:
-                logger.warning(f"PDF P{p['page_number']} 이미지 로드 실패: {e}")
-                y_cursor -= 10*mm
+            img = _pdf_load_image(p["image_url"])
+            if img:
+                img_h = h * 0.63
+                c.drawImage(img, 8*mm, h - img_h - 8*mm, w - 16*mm, img_h,
+                            preserveAspectRatio=True, anchor='c', mask='auto')
+
+        # 텍스트 영역 (하단 35%) — 부드러운 배경
+        text_area_h = h * 0.33
+        c.setFillColorRGB(1, 0.98, 0.94)
+        c.roundRect(8*mm, 6*mm, w - 16*mm, text_area_h, 8, fill=True, stroke=False)
 
         # 텍스트
         text = p["text_ko"] or ""
-        c.setFont(KR_FONT, 11)
+        c.setFont(KR_FONT, 13)
         c.setFillColorRGB(0.24, 0.17, 0.12)
+
+        # 줄바꿈 (한 줄 약 22자 — 정사각형 페이지에 맞춤)
         text_lines = []
         for line in text.split('\n'):
-            # 수동 줄바꿈 (한 줄 약 35자)
-            while len(line) > 35:
-                text_lines.append(line[:35])
-                line = line[35:]
-            text_lines.append(line)
+            while len(line) > 22:
+                text_lines.append(line[:22])
+                line = line[22:]
+            if line:
+                text_lines.append(line)
 
-        for tl in text_lines:
-            if y_cursor < 20*mm:
-                break
-            c.drawString(20*mm, y_cursor, tl)
-            y_cursor -= 6*mm
+        y = 6*mm + text_area_h - 10*mm
+        for tl in text_lines[:10]:  # 최대 10줄
+            c.drawString(14*mm, y, tl)
+            y -= 7*mm
+
+        # 페이지 번호
+        c.setFont(KR_FONT, 8)
+        c.setFillColorRGB(0.75, 0.65, 0.50)
+        c.drawCentredString(w / 2, 4*mm, f"— {p['page_number']} —")
 
         c.showPage()
 
-    # === 뒷표지 ===
-    c.setFillColorRGB(0.24, 0.17, 0.12)
+    # ── 뒷표지 ──
+    c.setFillColorRGB(0.99, 0.96, 0.90)
     c.rect(0, 0, w, h, fill=True)
-    c.setFillColorRGB(1, 0.97, 0.93)
-    c.setFont(KR_FONT, 14)
+
+    # 교훈
     moral = story["moral"] or ""
-    moral_w = c.stringWidth(moral, KR_FONT, 14)
-    c.drawString(max((w - moral_w) / 2, 15*mm), h / 2, moral)
+    c.setFont(KR_FONT, 15)
+    c.setFillColorRGB(0.24, 0.17, 0.12)
+    # 여러 줄 지원
+    moral_lines = []
+    while len(moral) > 18:
+        moral_lines.append(moral[:18])
+        moral = moral[18:]
+    if moral:
+        moral_lines.append(moral)
+    y = h / 2 + len(moral_lines) * 5*mm
+    for ml in moral_lines:
+        ml_w = c.stringWidth(ml, KR_FONT, 15)
+        c.drawString((w - ml_w) / 2, y, ml)
+        y -= 10*mm
+
     c.setFont(KR_FONT, 9)
-    c.drawCentredString(w / 2, h / 2 - 20*mm, "AXIS Engine | Grok Imagine & Kimi-K2.5")
+    c.setFillColorRGB(0.75, 0.65, 0.50)
+    c.drawCentredString(w / 2, 20*mm, "AXIS Engine | Grok Imagine & Kimi-K2.5")
+
+    # 작은 장식
+    c.setFont(KR_FONT, 28)
+    c.setFillColorRGB(0.85, 0.78, 0.65)
+    c.drawCentredString(w / 2, h * 0.70, "📖")
 
     c.showPage()
     c.save()
-
-    logger.info(f"PDF 생성 완료: {pdf_path}")
+    logger.info(f"PDF 생성 완료: {pdf_path} (210x210mm)")
     return pdf_path
+
+
+# ═══════════════════════════════════════════
+# HF Dataset — PDF 영구 저장/로드
+# ═══════════════════════════════════════════
+def _get_hf_api():
+    """HfApi 인스턴스 반환"""
+    try:
+        from huggingface_hub import HfApi
+        return HfApi(token=HF_TOKEN) if HF_TOKEN else None
+    except ImportError:
+        logger.warning("huggingface_hub 미설치")
+        return None
+
+def _ensure_hf_repo():
+    """HF 데이터셋 레포 존재 확인/생성"""
+    api = _get_hf_api()
+    if not api:
+        return False
+    try:
+        api.repo_info(repo_id=HF_BOOK_REPO, repo_type="dataset")
+        return True
+    except Exception:
+        try:
+            api.create_repo(repo_id=HF_BOOK_REPO, repo_type="dataset", private=True)
+            logger.info(f"HF 데이터셋 생성: {HF_BOOK_REPO}")
+            return True
+        except Exception as e:
+            logger.warning(f"HF 데이터셋 생성 실패: {e}")
+            return False
+
+def upload_pdf_to_hf(pdf_path, story_id, title, purpose):
+    """PDF를 HF 데이터셋에 업로드"""
+    api = _get_hf_api()
+    if not api or not pdf_path or not os.path.exists(pdf_path):
+        return None
+    if not _ensure_hf_repo():
+        return None
+    try:
+        filename = f"books/{story_id}.pdf"
+        api.upload_file(
+            path_or_fileobj=pdf_path,
+            path_in_repo=filename,
+            repo_id=HF_BOOK_REPO,
+            repo_type="dataset"
+        )
+        # 메타데이터 JSON 업로드
+        meta = json.dumps({
+            "story_id": story_id,
+            "title": title,
+            "purpose": purpose,
+            "created_at": datetime.now().isoformat()
+        }, ensure_ascii=False)
+        from io import BytesIO
+        meta_bytes = BytesIO(meta.encode('utf-8'))
+        api.upload_file(
+            path_or_fileobj=meta_bytes,
+            path_in_repo=f"books/{story_id}.json",
+            repo_id=HF_BOOK_REPO,
+            repo_type="dataset"
+        )
+        logger.info(f"PDF 업로드 완료: {HF_BOOK_REPO}/{filename}")
+        return filename
+    except Exception as e:
+        logger.warning(f"PDF 업로드 실패: {e}")
+        return None
+
+def list_hf_books():
+    """HF 데이터셋에서 저장된 동화책 목록 조회"""
+    api = _get_hf_api()
+    if not api:
+        return []
+    try:
+        files = api.list_repo_files(repo_id=HF_BOOK_REPO, repo_type="dataset")
+        books = []
+        for f in files:
+            if f.endswith('.json') and f.startswith('books/'):
+                try:
+                    content = api.hf_hub_download(repo_id=HF_BOOK_REPO, filename=f, repo_type="dataset")
+                    with open(content, 'r', encoding='utf-8') as fh:
+                        meta = json.load(fh)
+                        books.append(meta)
+                except Exception:
+                    pass
+        books.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        return books
+    except Exception as e:
+        logger.warning(f"HF 책 목록 조회 실패: {e}")
+        return []
+
+def download_hf_book(story_id):
+    """HF 데이터셋에서 PDF 다운로드"""
+    api = _get_hf_api()
+    if not api:
+        return None
+    try:
+        from huggingface_hub import hf_hub_download
+        path = hf_hub_download(
+            repo_id=HF_BOOK_REPO,
+            filename=f"books/{story_id}.pdf",
+            repo_type="dataset",
+            token=HF_TOKEN
+        )
+        return path
+    except Exception as e:
+        logger.warning(f"HF PDF 다운로드 실패: {e}")
+        return None
 
 
 # ═══════════════════════════════════════════
@@ -1396,11 +1538,22 @@ def run_pipeline(purpose, style, mood, child_name, child_age, child_traits, ref_
             md += "---\n\n"
         md += f"\n💡 **교훈:** {story['moral']}\n"
         
-        # === 3D 플립북 생성 ===
-        progress(0.97, desc="📕 3D 플립북 생성 중...")
-        log.append(f"\n▶ 3D 플립북 생성")
+        # === 3D 플립북 + PDF 생성 ===
+        progress(0.95, desc="📕 3D 플립북 생성 중...")
+        log.append(f"\n▶ 3D 플립북 + PDF 생성")
         flipbook = build_flipbook_html(story_id)
         log.append(f"  ✅ 플립북 HTML 생성 완료")
+
+        # PDF 생성 + HF 업로드
+        progress(0.97, desc="📥 PDF 생성 + 저장 중...")
+        pdf_path = generate_pdf(story_id)
+        if pdf_path:
+            log.append(f"  ✅ PDF 생성: {os.path.basename(pdf_path)}")
+            hf_result = upload_pdf_to_hf(pdf_path, story_id, title, purpose)
+            if hf_result:
+                log.append(f"  ✅ HF 데이터셋 저장 완료")
+            else:
+                log.append(f"  ⚠️ HF 업로드 스킵 (토큰 미설정 또는 오류)")
 
         progress(1.0, desc="✨ 완료!")
         log.append(f"\n🎉 완료! story_id: {story_id}")
@@ -1592,12 +1745,38 @@ with gr.Blocks(title="맞춤형 동화 생성 SaaS") as demo:
 
         with gr.TabItem("📚 이전 동화"):
             gr.Markdown("### 📚 이전에 생성한 동화 불러오기")
-            gr.HTML('<div style="font-size:12px;color:#8B7355;margin-bottom:10px;">DB에 저장된 동화를 불러와서 다시 볼 수 있습니다. ✅완료 ❌실패 ⏳진행중</div>')
-            with gr.Row():
-                refresh_btn = gr.Button("🔄 목록 새로고침", size="sm")
-            story_list_info = gr.Textbox(label="동화 목록", lines=6, interactive=False)
-            story_selector = gr.Dropdown(label="불러올 동화 선택", choices=[], interactive=True)
-            load_btn = gr.Button("📖 동화 불러오기", variant="primary")
+            gr.HTML('<div style="font-size:12px;color:#8B7355;margin-bottom:10px;">DB(로컬) 또는 HF 데이터셋(영구)에서 동화를 불러옵니다.</div>')
+
+            with gr.Accordion("📂 로컬 DB (현재 세션)", open=True):
+                with gr.Row():
+                    refresh_btn = gr.Button("🔄 목록 새로고침", size="sm")
+                story_list_info = gr.Textbox(label="동화 목록", lines=4, interactive=False)
+                story_selector = gr.Dropdown(label="불러올 동화 선택", choices=[], interactive=True)
+                load_btn = gr.Button("📖 동화 불러오기", variant="primary")
+
+            with gr.Accordion("📦 HF 데이터셋 (영구 저장)", open=False):
+                gr.HTML('<div style="font-size:11px;color:#8B7355;margin-bottom:8px;">HF 데이터셋에 저장된 동화책 PDF를 탐색합니다.</div>')
+                hf_refresh_btn = gr.Button("🔄 HF 책 목록 로드", size="sm")
+                hf_books_info = gr.Textbox(label="저장된 동화책", lines=4, interactive=False)
+                hf_book_selector = gr.Dropdown(label="다운로드할 책 선택", choices=[], interactive=True)
+                hf_download_btn = gr.Button("📥 PDF 다운로드", variant="secondary")
+                hf_pdf_file = gr.File(label="다운로드된 PDF", interactive=False)
+
+                def refresh_hf_books():
+                    books = list_hf_books()
+                    if not books:
+                        return gr.update(choices=[], value=None), "저장된 동화책이 없습니다."
+                    choices = [(f"📕 {b.get('title','?')} — {b.get('created_at','')[:10]}", b.get('story_id','')) for b in books]
+                    info = "\n".join([f"• {b.get('title','?')} ({b.get('purpose','')[:40]}...) [{b.get('created_at','')[:10]}]" for b in books])
+                    return gr.update(choices=choices, value=choices[0][1] if choices else None), info
+
+                def download_hf_pdf(story_id_val):
+                    if not story_id_val:
+                        return None
+                    return download_hf_book(story_id_val)
+
+                hf_refresh_btn.click(fn=refresh_hf_books, inputs=[], outputs=[hf_book_selector, hf_books_info])
+                hf_download_btn.click(fn=download_hf_pdf, inputs=[hf_book_selector], outputs=[hf_pdf_file])
 
             gr.Markdown("---")
             gr.Markdown("### 📖 불러온 동화")
