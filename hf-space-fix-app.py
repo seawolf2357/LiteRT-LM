@@ -938,17 +938,368 @@ def build_viewer_html(story_id):
 
 
 # ═══════════════════════════════════════════
+# 3D Flipbook Viewer — CSS + JS 플립북
+# ═══════════════════════════════════════════
+def build_flipbook_html(story_id):
+    """3D CSS 플립북 뷰어 HTML 생성"""
+    with get_db() as conn:
+        story = conn.execute("SELECT * FROM stories WHERE story_id=?", (story_id,)).fetchone()
+        pages = conn.execute("SELECT * FROM pages WHERE story_id=? ORDER BY page_number", (story_id,)).fetchall()
+
+    if not story:
+        return "<div style='text-align:center;padding:40px;color:#999;'>스토리를 찾을 수 없습니다.</div>"
+
+    # 시트 데이터 구성: 표지 + 15페이지 + 뒷표지
+    sheets_data = []
+
+    # 표지 (시트 0)
+    cover_img = pages[0]["image_url"] if pages and pages[0]["image_url"] else ""
+    cover_front = f'''<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;
+        background:linear-gradient(135deg,#FFF8EE,#FFF0D6);padding:20px;box-sizing:border-box;">
+        <div style="font-size:11px;color:#8B6914;letter-spacing:3px;margin-bottom:8px;">AXIS Emergence Engine</div>
+        <h1 style="font-family:Georgia,serif;font-size:22px;color:#3D2B1F;margin:0 0 8px;text-align:center;line-height:1.3;">{story["title"]}</h1>
+        <p style="font-size:12px;color:#8B7355;margin:0 0 12px;text-align:center;">{story["theme"]}</p>
+        {"<img src='" + cover_img + "' style='max-width:80%;max-height:55%;border-radius:8px;object-fit:cover;box-shadow:0 2px 10px rgba(0,0,0,0.1);'>" if cover_img else ""}
+        <p style="font-size:11px;color:#A0896A;margin-top:auto;">{story["child_name"]}의 이야기</p>
+    </div>'''
+
+    # 표지 뒷면 (빈 페이지)
+    cover_back = '<div style="height:100%;background:#FFFBF5;"></div>'
+    sheets_data.append((cover_front, cover_back))
+
+    # 본문 페이지들 (시트 1~8: 2페이지씩 묶음)
+    for i in range(0, len(pages), 2):
+        p1 = pages[i] if i < len(pages) else None
+        p2 = pages[i + 1] if i + 1 < len(pages) else None
+
+        # Front: 첫 번째 페이지
+        if p1:
+            img1 = f"<img src='{p1['image_url']}' style='width:100%;height:60%;object-fit:cover;border-radius:6px 6px 0 0;'>" if p1["image_url"] else "<div style='width:100%;height:60%;background:linear-gradient(135deg,#f0e6d3,#e8d5b8);display:flex;align-items:center;justify-content:center;border-radius:6px 6px 0 0;font-size:32px;'>🎨</div>"
+            front = f'''<div style="height:100%;display:flex;flex-direction:column;background:#FFFBF5;overflow:hidden;">
+                {img1}
+                <div style="flex:1;padding:10px 14px;overflow:hidden;">
+                    <div style="font-size:9px;color:#8B6914;font-weight:700;margin-bottom:4px;">P{p1["page_number"]}/15</div>
+                    <div style="font-family:Georgia,serif;font-size:12px;line-height:1.7;color:#3D2B1F;">{p1["text_ko"][:200]}</div>
+                </div>
+            </div>'''
+        else:
+            front = '<div style="height:100%;background:#FFFBF5;"></div>'
+
+        # Back: 두 번째 페이지
+        if p2:
+            img2 = f"<img src='{p2['image_url']}' style='width:100%;height:60%;object-fit:cover;border-radius:6px 6px 0 0;'>" if p2["image_url"] else "<div style='width:100%;height:60%;background:linear-gradient(135deg,#f0e6d3,#e8d5b8);display:flex;align-items:center;justify-content:center;border-radius:6px 6px 0 0;font-size:32px;'>🎨</div>"
+            back = f'''<div style="height:100%;display:flex;flex-direction:column;background:#FFFBF5;overflow:hidden;">
+                {img2}
+                <div style="flex:1;padding:10px 14px;overflow:hidden;">
+                    <div style="font-size:9px;color:#8B6914;font-weight:700;margin-bottom:4px;">P{p2["page_number"]}/15</div>
+                    <div style="font-family:Georgia,serif;font-size:12px;line-height:1.7;color:#3D2B1F;">{p2["text_ko"][:200]}</div>
+                </div>
+            </div>'''
+        else:
+            back = '<div style="height:100%;background:#FFFBF5;"></div>'
+
+        sheets_data.append((front, back))
+
+    # 뒷표지
+    back_cover_front = f'''<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;
+        background:linear-gradient(135deg,#FFF0D6,#FFF8EE);padding:20px;box-sizing:border-box;">
+        <div style="font-size:48px;margin-bottom:16px;">📖</div>
+        <p style="font-family:Georgia,serif;font-size:14px;color:#3D2B1F;text-align:center;line-height:1.8;margin:0 0 16px;">{story["moral"]}</p>
+        <div style="font-size:10px;color:#A0896A;text-align:center;">— 끝 —</div>
+        <div style="margin-top:auto;font-size:9px;color:#C0A87A;text-align:center;">AXIS Engine | Grok Imagine & Kimi-K2.5</div>
+    </div>'''
+    back_cover_back = '<div style="height:100%;background:linear-gradient(135deg,#3D2B1F,#5C4A2A);border-radius:0 4px 4px 0;"></div>'
+    sheets_data.append((back_cover_front, back_cover_back))
+
+    total = len(sheets_data)
+
+    # 시트 HTML 생성
+    sheets_html = ""
+    for idx, (front, back) in enumerate(sheets_data):
+        z = total - idx
+        sheets_html += f'''<div class="fb-sheet" data-index="{idx}" style="z-index:{z};">
+            <div class="fb-front">{front}</div>
+            <div class="fb-back">{back}</div>
+        </div>\n'''
+
+    return f'''
+    <div id="fb-wrap" style="max-width:700px;margin:0 auto;font-family:'Noto Sans KR',sans-serif;user-select:none;">
+        <style>
+            .fb-scene {{
+                perspective: 2000px;
+                width: 340px; height: 480px;
+                margin: 0 auto;
+                position: relative;
+            }}
+            .fb-sheet {{
+                position: absolute; width: 100%; height: 100%;
+                transform-style: preserve-3d;
+                transform-origin: left center;
+                transition: transform 0.8s cubic-bezier(0.645,0.045,0.355,1.000);
+                cursor: pointer;
+                border-radius: 0 4px 4px 0;
+                box-shadow: 2px 2px 8px rgba(0,0,0,0.06);
+            }}
+            .fb-sheet.flipped {{ transform: rotateY(-180deg); }}
+            .fb-front, .fb-back {{
+                position: absolute; width: 100%; height: 100%;
+                backface-visibility: hidden;
+                -webkit-backface-visibility: hidden;
+                overflow: hidden;
+                border-radius: 0 4px 4px 0;
+                border: 1px solid #E8D5B8;
+            }}
+            .fb-back {{
+                transform: rotateY(180deg);
+            }}
+            .fb-front::after, .fb-back::after {{
+                content: '';
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                background: linear-gradient(to right, rgba(0,0,0,0.06) 0%, transparent 8%, transparent 92%, rgba(0,0,0,0.03) 100%);
+                pointer-events: none;
+            }}
+            .fb-nav {{
+                display: flex; justify-content: center; align-items: center;
+                gap: 16px; margin-top: 16px;
+            }}
+            .fb-btn {{
+                background: #8B6914; color: white; border: none;
+                padding: 8px 20px; border-radius: 20px; cursor: pointer;
+                font-size: 13px; font-weight: 600;
+                transition: background 0.2s;
+            }}
+            .fb-btn:hover {{ background: #6B5210; }}
+            .fb-btn:disabled {{ background: #C0A87A; cursor: default; }}
+            .fb-info {{
+                text-align: center; margin-top: 8px;
+                font-size: 12px; color: #8B7355;
+            }}
+            .fb-spine {{
+                position: absolute; left: -3px; top: 0; bottom: 0; width: 6px;
+                background: linear-gradient(to right, #5C4A2A, #8B6914, #5C4A2A);
+                border-radius: 3px 0 0 3px;
+                box-shadow: -1px 0 3px rgba(0,0,0,0.2);
+                z-index: 9999;
+            }}
+        </style>
+
+        <div style="text-align:center;margin-bottom:12px;">
+            <span style="font-size:12px;color:#8B6914;font-weight:600;">📕 3D 플립북</span>
+            <span style="font-size:11px;color:#A0896A;margin-left:8px;">클릭 또는 ← → 키로 넘기세요</span>
+        </div>
+
+        <div class="fb-scene" id="fb-scene">
+            <div class="fb-spine"></div>
+            {sheets_html}
+        </div>
+
+        <div class="fb-nav">
+            <button class="fb-btn" id="fb-prev" onclick="fbPrev()">◀ 이전</button>
+            <span class="fb-info" id="fb-info">1 / {total}</span>
+            <button class="fb-btn" id="fb-next" onclick="fbNext()">다음 ▶</button>
+        </div>
+
+        <script>
+        (function() {{
+            const sheets = document.querySelectorAll('#fb-scene .fb-sheet');
+            const total = {total};
+            let current = 0;
+
+            function update() {{
+                sheets.forEach((s, i) => {{
+                    if (i < current) {{
+                        s.classList.add('flipped');
+                        s.style.zIndex = i + 1;
+                    }} else {{
+                        s.classList.remove('flipped');
+                        s.style.zIndex = total - i;
+                    }}
+                }});
+                document.getElementById('fb-info').textContent = (current + 1) + ' / ' + total;
+                document.getElementById('fb-prev').disabled = (current === 0);
+                document.getElementById('fb-next').disabled = (current >= total - 1);
+            }}
+
+            window.fbNext = function() {{
+                if (current < total - 1) {{ current++; update(); }}
+            }};
+            window.fbPrev = function() {{
+                if (current > 0) {{ current--; update(); }}
+            }};
+
+            sheets.forEach((s, i) => {{
+                s.addEventListener('click', function() {{
+                    if (i >= current) window.fbNext();
+                    else window.fbPrev();
+                }});
+            }});
+
+            document.addEventListener('keydown', function(e) {{
+                if (e.key === 'ArrowRight') window.fbNext();
+                else if (e.key === 'ArrowLeft') window.fbPrev();
+            }});
+
+            update();
+        }})();
+        </script>
+    </div>'''
+
+
+# ═══════════════════════════════════════════
+# PDF Generation — ReportLab
+# ═══════════════════════════════════════════
+def generate_pdf(story_id):
+    """동화 PDF 생성 — 한국어 지원"""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from io import BytesIO
+    import tempfile
+
+    # 한국어 CID 폰트 등록 (별도 ttf 파일 불필요)
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont('HYSMyeongJo-Medium'))
+        KR_FONT = 'HYSMyeongJo-Medium'
+    except Exception:
+        KR_FONT = 'Helvetica'
+
+    with get_db() as conn:
+        story = conn.execute("SELECT * FROM stories WHERE story_id=?", (story_id,)).fetchone()
+        pages = conn.execute("SELECT * FROM pages WHERE story_id=? ORDER BY page_number", (story_id,)).fetchall()
+
+    if not story:
+        return None
+
+    w, h = A4
+    pdf_path = os.path.join(tempfile.gettempdir(), f"fairytale_{story_id}.pdf")
+    c = canvas.Canvas(pdf_path, pagesize=A4)
+
+    # === 표지 ===
+    c.setFillColorRGB(0.24, 0.17, 0.12)
+    c.rect(0, 0, w, h, fill=True)
+    c.setFillColorRGB(1, 0.97, 0.93)
+    c.rect(15*mm, 15*mm, w - 30*mm, h - 30*mm, fill=True)
+
+    c.setFont(KR_FONT, 24)
+    c.setFillColorRGB(0.24, 0.17, 0.12)
+    # 제목 — 중앙 정렬
+    title = story["title"] or "동화"
+    title_w = c.stringWidth(title, KR_FONT, 24)
+    c.drawString((w - title_w) / 2, h - 80*mm, title)
+
+    c.setFont(KR_FONT, 12)
+    c.setFillColorRGB(0.55, 0.45, 0.33)
+    theme = story["theme"] or ""
+    theme_w = c.stringWidth(theme, KR_FONT, 12)
+    c.drawString((w - theme_w) / 2, h - 95*mm, theme)
+
+    # 표지 이미지
+    if pages and pages[0]["image_url"]:
+        try:
+            img_resp = requests.get(pages[0]["image_url"], timeout=15)
+            if img_resp.status_code == 200:
+                from reportlab.lib.utils import ImageReader
+                img_io = BytesIO(img_resp.content)
+                img_reader = ImageReader(img_io)
+                iw, ih = img_reader.getSize()
+                max_w = w - 60*mm
+                max_h = 100*mm
+                scale = min(max_w / iw, max_h / ih)
+                dw, dh = iw * scale, ih * scale
+                c.drawImage(img_reader, (w - dw) / 2, 40*mm, dw, dh, preserveAspectRatio=True, mask='auto')
+        except Exception as e:
+            logger.warning(f"PDF 표지 이미지 로드 실패: {e}")
+
+    c.setFont(KR_FONT, 10)
+    c.drawCentredString(w / 2, 25*mm, f"{story['child_name']}의 이야기")
+
+    c.showPage()
+
+    # === 본문 페이지 ===
+    for p in pages:
+        # 배경
+        c.setFillColorRGB(1, 0.99, 0.96)
+        c.rect(0, 0, w, h, fill=True)
+
+        y_cursor = h - 15*mm
+
+        # 페이지 번호
+        c.setFont(KR_FONT, 8)
+        c.setFillColorRGB(0.55, 0.41, 0.08)
+        c.drawString(15*mm, y_cursor, f"P{p['page_number']}/15")
+        y_cursor -= 5*mm
+
+        # 이미지
+        if p["image_url"]:
+            try:
+                img_resp = requests.get(p["image_url"], timeout=15)
+                if img_resp.status_code == 200:
+                    from reportlab.lib.utils import ImageReader
+                    img_io = BytesIO(img_resp.content)
+                    img_reader = ImageReader(img_io)
+                    iw, ih = img_reader.getSize()
+                    max_w = w - 30*mm
+                    max_h = 160*mm
+                    scale = min(max_w / iw, max_h / ih)
+                    dw, dh = iw * scale, ih * scale
+                    c.drawImage(img_reader, (w - dw) / 2, y_cursor - dh, dw, dh, preserveAspectRatio=True, mask='auto')
+                    y_cursor -= (dh + 8*mm)
+            except Exception as e:
+                logger.warning(f"PDF P{p['page_number']} 이미지 로드 실패: {e}")
+                y_cursor -= 10*mm
+
+        # 텍스트
+        text = p["text_ko"] or ""
+        c.setFont(KR_FONT, 11)
+        c.setFillColorRGB(0.24, 0.17, 0.12)
+        text_lines = []
+        for line in text.split('\n'):
+            # 수동 줄바꿈 (한 줄 약 35자)
+            while len(line) > 35:
+                text_lines.append(line[:35])
+                line = line[35:]
+            text_lines.append(line)
+
+        for tl in text_lines:
+            if y_cursor < 20*mm:
+                break
+            c.drawString(20*mm, y_cursor, tl)
+            y_cursor -= 6*mm
+
+        c.showPage()
+
+    # === 뒷표지 ===
+    c.setFillColorRGB(0.24, 0.17, 0.12)
+    c.rect(0, 0, w, h, fill=True)
+    c.setFillColorRGB(1, 0.97, 0.93)
+    c.setFont(KR_FONT, 14)
+    moral = story["moral"] or ""
+    moral_w = c.stringWidth(moral, KR_FONT, 14)
+    c.drawString(max((w - moral_w) / 2, 15*mm), h / 2, moral)
+    c.setFont(KR_FONT, 9)
+    c.drawCentredString(w / 2, h / 2 - 20*mm, "AXIS Engine | Grok Imagine & Kimi-K2.5")
+
+    c.showPage()
+    c.save()
+
+    logger.info(f"PDF 생성 완료: {pdf_path}")
+    return pdf_path
+
+
+# ═══════════════════════════════════════════
 # Main Pipeline — 모든 단계 DB 경유
 # ═══════════════════════════════════════════
 def run_pipeline(purpose, style, mood, child_name, child_age, child_traits, ref_image, progress=gr.Progress()):
     if not FIREWORKS_API_KEY:
-        return "⚠️ FIREWORKS_API_KEY 미설정", "", {}, ""
+        return "⚠️ FIREWORKS_API_KEY 미설정", "", {}, "", ""
     if not FAL_KEY:
-        return "⚠️ FAL_KEY 미설정", "", {}, ""
+        return "⚠️ FAL_KEY 미설정", "", {}, "", ""
     if not purpose or len(purpose.strip()) < 5:
-        return "⚠️ 목적/주제를 입력해주세요.", "", {}, ""
+        return "⚠️ 목적/주제를 입력해주세요.", "", {}, "", ""
     if not child_name:
-        return "⚠️ 주인공 이름을 입력해주세요.", "", {}, ""
+        return "⚠️ 주인공 이름을 입력해주세요.", "", {}, "", ""
     
     log = []
     story_id = str(uuid.uuid4())[:12]
@@ -1045,15 +1396,21 @@ def run_pipeline(purpose, style, mood, child_name, child_age, child_traits, ref_
             md += "---\n\n"
         md += f"\n💡 **교훈:** {story['moral']}\n"
         
+        # === 3D 플립북 생성 ===
+        progress(0.97, desc="📕 3D 플립북 생성 중...")
+        log.append(f"\n▶ 3D 플립북 생성")
+        flipbook = build_flipbook_html(story_id)
+        log.append(f"  ✅ 플립북 HTML 생성 완료")
+
         progress(1.0, desc="✨ 완료!")
         log.append(f"\n🎉 완료! story_id: {story_id}")
-        
+
         with get_db() as conn:
             conn.execute("UPDATE stories SET status='completed', updated_at=CURRENT_TIMESTAMP WHERE story_id=?", (story_id,))
-        
+
         # ★ gr.JSON은 dict를 받아야 함 (json.dumps 문자열 X)
-        return viewer, md, verification, "\n".join(log)
-    
+        return viewer, md, verification, "\n".join(log), flipbook
+
     except Exception as e:
         logger.error(f"Pipeline error: {e}", exc_info=True)
         log.append(f"\n❌ 오류: {e}")
@@ -1065,9 +1422,11 @@ def run_pipeline(purpose, style, mood, child_name, child_age, child_traits, ref_
         # 부분 결과라도 보여주기
         try:
             viewer = build_viewer_html(story_id)
+            flipbook = build_flipbook_html(story_id)
         except Exception:
             viewer = f"<div style='color:#C0392B;padding:20px;'>❌ {e}</div>"
-        return viewer, "", {}, "\n".join(log)
+            flipbook = ""
+        return viewer, "", {}, "\n".join(log), flipbook
 
 
 # ═══════════════════════════════════════════
@@ -1098,16 +1457,16 @@ def list_stories():
 def load_story_from_db(story_id):
     """DB에서 동화를 불러와서 뷰어, 마크다운, 검증결과를 반환"""
     if not story_id:
-        return "<div style='text-align:center;padding:40px;color:#A0896A;'>동화를 선택해주세요</div>", "", {}
-    
+        return "<div style='text-align:center;padding:40px;color:#A0896A;'>동화를 선택해주세요</div>", "", {}, ""
+
     try:
         with get_db() as conn:
             story = conn.execute("SELECT * FROM stories WHERE story_id=?", (story_id,)).fetchone()
             pages = conn.execute("SELECT * FROM pages WHERE story_id=? ORDER BY page_number", (story_id,)).fetchall()
             verify = conn.execute("SELECT * FROM verifications WHERE story_id=? ORDER BY created_at DESC LIMIT 1", (story_id,)).fetchone()
-        
+
         if not story:
-            return "<div style='color:#C0392B;padding:20px;'>❌ 해당 동화를 찾을 수 없습니다.</div>", "", {}
+            return "<div style='color:#C0392B;padding:20px;'>❌ 해당 동화를 찾을 수 없습니다.</div>", "", {}, ""
         
         # 뷰어 HTML
         viewer = build_viewer_html(story_id)
@@ -1142,11 +1501,12 @@ def load_story_from_db(story_id):
             except (json.JSONDecodeError, TypeError):
                 verify_data = {"raw": verify["result_json"]}
         
-        return viewer, md, verify_data
-    
+        flipbook = build_flipbook_html(story_id)
+        return viewer, md, verify_data, flipbook
+
     except Exception as e:
         logger.error(f"동화 불러오기 실패: {e}", exc_info=True)
-        return f"<div style='color:#C0392B;padding:20px;'>❌ 불러오기 실패: {e}</div>", "", {}
+        return f"<div style='color:#C0392B;padding:20px;'>❌ 불러오기 실패: {e}</div>", "", {}, ""
 
 
 # ═══════════════════════════════════════════
@@ -1174,7 +1534,7 @@ HEADER = """
 
 with gr.Blocks(title="맞춤형 동화 생성 SaaS") as demo:
     gr.HTML(HEADER)
-    
+
     with gr.Tabs():
         with gr.TabItem("✨ 동화 만들기"):
             with gr.Row():
@@ -1206,14 +1566,30 @@ with gr.Blocks(title="맞춤형 동화 생성 SaaS") as demo:
         
         with gr.TabItem("📖 동화 뷰어"):
             viewer_output = gr.HTML("<div style='text-align:center;padding:60px;color:#A0896A;'><div style='font-size:48px;margin-bottom:12px;'>📖</div>동화를 생성하면 여기에 표시됩니다</div>")
-        
+
+        with gr.TabItem("📕 3D 플립북"):
+            flipbook_output = gr.HTML("<div style='text-align:center;padding:60px;color:#A0896A;'><div style='font-size:48px;margin-bottom:12px;'>📕</div>동화를 생성하면 3D 플립북이 여기에 표시됩니다<br><span style='font-size:12px;'>클릭 또는 ← → 키로 페이지를 넘길 수 있습니다</span></div>")
+            gr.Markdown("---")
+            gr.Markdown("### 📥 PDF 다운로드")
+            pdf_btn = gr.Button("📥 최근 동화 PDF 다운로드", variant="secondary")
+            pdf_file = gr.File(label="생성된 PDF", interactive=False)
+
+            def download_latest_pdf():
+                """최근 완료된 동화의 PDF 생성"""
+                with get_db() as conn:
+                    row = conn.execute("SELECT story_id FROM stories WHERE status='completed' ORDER BY updated_at DESC LIMIT 1").fetchone()
+                if row:
+                    return generate_pdf(row["story_id"])
+                return None
+            pdf_btn.click(fn=download_latest_pdf, inputs=[], outputs=[pdf_file])
+
         with gr.TabItem("📝 스토리 전문"):
             story_output = gr.Markdown("*동화를 생성하면 전체 텍스트가 여기에 표시됩니다.*")
-        
+
         with gr.TabItem("🔍 AXIS 품질 검증"):
             gr.Markdown("### MARL 5-Agent 품질 검증 결과")
             verification_output = gr.JSON(label="검증 결과")
-        
+
         with gr.TabItem("📚 이전 동화"):
             gr.Markdown("### 📚 이전에 생성한 동화 불러오기")
             gr.HTML('<div style="font-size:12px;color:#8B7355;margin-bottom:10px;">DB에 저장된 동화를 불러와서 다시 볼 수 있습니다. ✅완료 ❌실패 ⏳진행중</div>')
@@ -1222,18 +1598,19 @@ with gr.Blocks(title="맞춤형 동화 생성 SaaS") as demo:
             story_list_info = gr.Textbox(label="동화 목록", lines=6, interactive=False)
             story_selector = gr.Dropdown(label="불러올 동화 선택", choices=[], interactive=True)
             load_btn = gr.Button("📖 동화 불러오기", variant="primary")
-            
+
             gr.Markdown("---")
             gr.Markdown("### 📖 불러온 동화")
             loaded_viewer = gr.HTML("<div style='text-align:center;padding:40px;color:#A0896A;'>위에서 동화를 선택하고 '불러오기' 버튼을 누르세요</div>")
             loaded_story = gr.Markdown("*동화를 선택하면 여기에 전문이 표시됩니다.*")
             loaded_verify = gr.JSON(label="검증 결과")
-            
+            loaded_flipbook = gr.HTML("")
+
             refresh_btn.click(fn=list_stories, inputs=[], outputs=[story_selector, story_list_info])
-            load_btn.click(fn=load_story_from_db, inputs=[story_selector], outputs=[loaded_viewer, loaded_story, loaded_verify])
-    
+            load_btn.click(fn=load_story_from_db, inputs=[story_selector], outputs=[loaded_viewer, loaded_story, loaded_verify, loaded_flipbook])
+
     generate_btn.click(fn=run_pipeline, inputs=[purpose, style, mood, child_name, child_age, child_traits, ref_image],
-                       outputs=[viewer_output, story_output, verification_output, gen_log], show_progress="full")
+                       outputs=[viewer_output, story_output, verification_output, gen_log, flipbook_output], show_progress="full")
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=7860, share=False, css=CSS, theme=gr.themes.Soft())
