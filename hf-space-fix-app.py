@@ -942,23 +942,28 @@ def build_viewer_html(story_id):
 
 
 # ═══════════════════════════════════════════
-# 3D Flipbook Viewer — 단면/양면 모드 지원
+# 3D Flipbook Viewer — iframe srcdoc 방식 (Gradio sanitize 우회)
 # ═══════════════════════════════════════════
 def _fb_page_html(p):
-    """플립북 페이지 하나의 HTML 생성"""
+    """플립북 페이지 하나의 HTML 생성 (큰따옴표만 사용)"""
     if not p:
         return '<div style="height:100%;background:#FFFBF5;"></div>'
-    img = f"<img src='{p['image_url']}' style='width:100%;height:62%;object-fit:cover;'>" if p["image_url"] else "<div style='width:100%;height:62%;background:linear-gradient(135deg,#f0e6d3,#e8d5b8);display:flex;align-items:center;justify-content:center;font-size:32px;'>🎨</div>"
+    img_url = p["image_url"] or ""
+    if img_url:
+        img = f'<img src="{img_url}" style="width:100%;height:62%;object-fit:cover;">'
+    else:
+        img = '<div style="width:100%;height:62%;background:linear-gradient(135deg,#f0e6d3,#e8d5b8);display:flex;align-items:center;justify-content:center;font-size:32px;">&#x1F3A8;</div>'
+    text = (p["text_ko"] or "").replace("'", "&#39;").replace('"', "&quot;")
     return f'''<div style="height:100%;display:flex;flex-direction:column;background:#FFFBF5;overflow:hidden;">
         {img}
         <div style="flex:1;padding:8px 12px;overflow:hidden;">
             <div style="font-size:8px;color:#8B6914;font-weight:700;margin-bottom:3px;">P{p["page_number"]}</div>
-            <div style="font-family:Georgia,serif;font-size:11.5px;line-height:1.65;color:#3D2B1F;">{p["text_ko"]}</div>
+            <div style="font-family:Georgia,serif;font-size:11.5px;line-height:1.65;color:#3D2B1F;">{text}</div>
         </div>
     </div>'''
 
 def build_flipbook_html(story_id):
-    """3D CSS 플립북 — 단면/양면 모드 전환 지원"""
+    """3D CSS 플립북 — iframe srcdoc로 Gradio sanitize 우회"""
     with get_db() as conn:
         story = conn.execute("SELECT * FROM stories WHERE story_id=?", (story_id,)).fetchone()
         pages = conn.execute("SELECT * FROM pages WHERE story_id=? ORDER BY page_number", (story_id,)).fetchall()
@@ -966,18 +971,24 @@ def build_flipbook_html(story_id):
     if not story:
         return "<div style='text-align:center;padding:40px;color:#999;'>스토리를 찾을 수 없습니다.</div>"
 
-    # 개별 페이지 콘텐츠 배열: 표지, P1~P15, 뒷표지
+    # 개별 페이지 콘텐츠: 표지, P1~P15, 뒷표지
     all_pages = []
 
     # 표지
     cover_img = pages[0]["image_url"] if pages and pages[0]["image_url"] else ""
+    title_safe = (story["title"] or "").replace("'", "&#39;").replace('"', "&quot;")
+    theme_safe = (story["theme"] or "").replace("'", "&#39;").replace('"', "&quot;")
+    moral_safe = (story["moral"] or "").replace("'", "&#39;").replace('"', "&quot;")
+    child_safe = (story["child_name"] or "").replace("'", "&#39;").replace('"', "&quot;")
+
+    cover_img_tag = f'<img src="{cover_img}" style="max-width:85%;max-height:50%;border-radius:6px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,0.1);">' if cover_img else ""
     all_pages.append(f'''<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;
         background:linear-gradient(135deg,#FFF8EE,#FFF0D6);padding:16px;box-sizing:border-box;">
         <div style="font-size:10px;color:#8B6914;letter-spacing:3px;margin-bottom:6px;">AXIS Emergence Engine</div>
-        <h1 style="font-family:Georgia,serif;font-size:20px;color:#3D2B1F;margin:0 0 6px;text-align:center;line-height:1.3;">{story["title"]}</h1>
-        <p style="font-size:11px;color:#8B7355;margin:0 0 10px;text-align:center;">{story["theme"]}</p>
-        {"<img src='" + cover_img + "' style='max-width:85%;max-height:50%;border-radius:6px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,0.1);'>" if cover_img else ""}
-        <p style="font-size:10px;color:#A0896A;margin-top:auto;">{story["child_name"]}의 이야기</p>
+        <h1 style="font-family:Georgia,serif;font-size:20px;color:#3D2B1F;margin:0 0 6px;text-align:center;line-height:1.3;">{title_safe}</h1>
+        <p style="font-size:11px;color:#8B7355;margin:0 0 10px;text-align:center;">{theme_safe}</p>
+        {cover_img_tag}
+        <p style="font-size:10px;color:#A0896A;margin-top:auto;">{child_safe}의 이야기</p>
     </div>''')
 
     # 본문 15페이지
@@ -987,15 +998,15 @@ def build_flipbook_html(story_id):
     # 뒷표지
     all_pages.append(f'''<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;
         background:linear-gradient(135deg,#FFF0D6,#FFF8EE);padding:16px;box-sizing:border-box;">
-        <div style="font-size:40px;margin-bottom:12px;">📖</div>
-        <p style="font-family:Georgia,serif;font-size:13px;color:#3D2B1F;text-align:center;line-height:1.8;margin:0 0 12px;">{story["moral"]}</p>
-        <div style="font-size:9px;color:#A0896A;">— 끝 —</div>
-        <div style="margin-top:auto;font-size:8px;color:#C0A87A;">AXIS Engine | Grok Imagine & Kimi-K2.5</div>
+        <div style="font-size:40px;margin-bottom:12px;">&#x1F4D6;</div>
+        <p style="font-family:Georgia,serif;font-size:13px;color:#3D2B1F;text-align:center;line-height:1.8;margin:0 0 12px;">{moral_safe}</p>
+        <div style="font-size:9px;color:#A0896A;">&#x2014; 끝 &#x2014;</div>
+        <div style="margin-top:auto;font-size:8px;color:#C0A87A;">AXIS Engine | Grok Imagine &amp; Kimi-K2.5</div>
     </div>''')
 
     total_pages = len(all_pages)
 
-    # 시트 생성: 각 시트는 front/back, 1페이지 = 1시트의 front
+    # 시트 HTML
     sheets_html = ""
     for idx in range(total_pages):
         z = total_pages - idx
@@ -1006,160 +1017,122 @@ def build_flipbook_html(story_id):
             <div class="fb-back">{back}</div>
         </div>\n'''
 
-    return f'''
-    <div id="fb-wrap" style="max-width:750px;margin:0 auto;font-family:'Noto Sans KR',sans-serif;user-select:none;">
-        <style>
-            .fb-mode-bar {{
-                display:flex;justify-content:center;gap:8px;margin-bottom:10px;
-            }}
-            .fb-mode-btn {{
-                padding:6px 16px;border-radius:16px;border:1.5px solid #8B6914;
-                background:white;color:#8B6914;font-size:12px;font-weight:600;cursor:pointer;
-                transition:all 0.2s;
-            }}
-            .fb-mode-btn.active {{
-                background:#8B6914;color:white;
-            }}
-            .fb-scene {{
-                perspective:2000px;
-                margin:0 auto;position:relative;
-                transition:width 0.4s,height 0.4s;
-            }}
-            .fb-scene.single {{ width:320px;height:440px; }}
-            .fb-scene.spread {{ width:640px;height:440px; }}
-            .fb-sheet {{
-                position:absolute;width:320px;height:100%;
-                transform-style:preserve-3d;
-                transform-origin:left center;
-                transition:transform 0.8s cubic-bezier(0.645,0.045,0.355,1.000);
-                cursor:pointer;
-            }}
-            .fb-scene.single .fb-sheet {{ width:100%; }}
-            .fb-scene.spread .fb-sheet {{
-                width:320px;left:320px;
-            }}
-            .fb-sheet.flipped {{ transform:rotateY(-180deg); }}
-            .fb-front,.fb-back {{
-                position:absolute;width:100%;height:100%;
-                backface-visibility:hidden;-webkit-backface-visibility:hidden;
-                overflow:hidden;border:1px solid #E8D5B8;background:#FFFBF5;
-            }}
-            .fb-back {{ transform:rotateY(180deg); }}
-            .fb-front::after,.fb-back::after {{
-                content:'';position:absolute;top:0;left:0;right:0;bottom:0;
-                background:linear-gradient(to right,rgba(0,0,0,0.05) 0%,transparent 6%,transparent 94%,rgba(0,0,0,0.02) 100%);
-                pointer-events:none;
-            }}
-            .fb-left-page {{
-                position:absolute;left:0;top:0;width:320px;height:100%;
-                background:#FFFBF5;border:1px solid #E8D5B8;overflow:hidden;
-                display:none;
-            }}
-            .fb-scene.spread .fb-left-page {{ display:block; }}
-            .fb-spine {{
-                position:absolute;top:0;bottom:0;width:4px;
-                background:linear-gradient(to right,#5C4A2A,#8B6914,#5C4A2A);
-                z-index:9999;box-shadow:0 0 4px rgba(0,0,0,0.3);
-            }}
-            .fb-scene.single .fb-spine {{ left:-2px;border-radius:2px 0 0 2px; }}
-            .fb-scene.spread .fb-spine {{ left:318px; }}
-            .fb-nav {{
-                display:flex;justify-content:center;align-items:center;
-                gap:14px;margin-top:14px;
-            }}
-            .fb-btn {{
-                background:#8B6914;color:white;border:none;
-                padding:7px 18px;border-radius:18px;cursor:pointer;
-                font-size:12px;font-weight:600;transition:background 0.2s;
-            }}
-            .fb-btn:hover {{ background:#6B5210; }}
-            .fb-btn:disabled {{ background:#C0A87A;cursor:default; }}
-            .fb-info {{ font-size:12px;color:#8B7355; }}
-        </style>
+    # 완전한 HTML 문서 (iframe 내부용)
+    inner_html = f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* {{ margin:0;padding:0;box-sizing:border-box; }}
+body {{ font-family:"Noto Sans KR",sans-serif;background:transparent;display:flex;flex-direction:column;align-items:center;padding:8px;user-select:none; }}
+.fb-mode-bar {{ display:flex;justify-content:center;gap:8px;margin-bottom:10px; }}
+.fb-mode-btn {{ padding:6px 16px;border-radius:16px;border:1.5px solid #8B6914;background:white;color:#8B6914;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s; }}
+.fb-mode-btn.active {{ background:#8B6914;color:white; }}
+.fb-scene {{ perspective:2000px;margin:0 auto;position:relative;transition:width 0.4s,height 0.4s; }}
+.fb-scene.single {{ width:320px;height:440px; }}
+.fb-scene.spread {{ width:640px;height:440px; }}
+.fb-sheet {{ position:absolute;width:320px;height:100%;transform-style:preserve-3d;transform-origin:left center;transition:transform 0.8s cubic-bezier(0.645,0.045,0.355,1.000);cursor:pointer; }}
+.fb-scene.single .fb-sheet {{ width:100%; }}
+.fb-scene.spread .fb-sheet {{ width:320px;left:320px; }}
+.fb-sheet.flipped {{ transform:rotateY(-180deg); }}
+.fb-front,.fb-back {{ position:absolute;width:100%;height:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden;overflow:hidden;border:1px solid #E8D5B8;background:#FFFBF5; }}
+.fb-back {{ transform:rotateY(180deg); }}
+.fb-front::after,.fb-back::after {{ content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to right,rgba(0,0,0,0.05) 0%,transparent 6%,transparent 94%,rgba(0,0,0,0.02) 100%);pointer-events:none; }}
+.fb-left-page {{ position:absolute;left:0;top:0;width:320px;height:100%;background:#FFFBF5;border:1px solid #E8D5B8;overflow:hidden;display:none; }}
+.fb-scene.spread .fb-left-page {{ display:block; }}
+.fb-spine {{ position:absolute;top:0;bottom:0;width:4px;background:linear-gradient(to right,#5C4A2A,#8B6914,#5C4A2A);z-index:9999;box-shadow:0 0 4px rgba(0,0,0,0.3); }}
+.fb-scene.single .fb-spine {{ left:-2px;border-radius:2px 0 0 2px; }}
+.fb-scene.spread .fb-spine {{ left:318px; }}
+.fb-nav {{ display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px; }}
+.fb-btn {{ background:#8B6914;color:white;border:none;padding:7px 18px;border-radius:18px;cursor:pointer;font-size:12px;font-weight:600;transition:background 0.2s; }}
+.fb-btn:hover {{ background:#6B5210; }}
+.fb-btn:disabled {{ background:#C0A87A;cursor:default; }}
+.fb-info {{ font-size:12px;color:#8B7355; }}
+</style></head>
+<body>
+<div class="fb-mode-bar">
+    <button class="fb-mode-btn active" id="fb-mode-single" onclick="fbSetMode('single')">&#x1F4C4; 단면 보기</button>
+    <button class="fb-mode-btn" id="fb-mode-spread" onclick="fbSetMode('spread')">&#x1F4D6; 양면 펼침</button>
+</div>
+<div class="fb-scene single" id="fb-scene">
+    <div class="fb-spine"></div>
+    <div class="fb-left-page" id="fb-left"></div>
+    {sheets_html}
+</div>
+<div class="fb-nav">
+    <button class="fb-btn" id="fb-prev" onclick="fbPrev()">&#x25C0; 이전</button>
+    <span class="fb-info" id="fb-info">1 / {total_pages}</span>
+    <button class="fb-btn" id="fb-next" onclick="fbNext()">다음 &#x25B6;</button>
+</div>
+<script>
+(function() {{
+    var scene = document.getElementById("fb-scene");
+    var sheets = document.querySelectorAll("#fb-scene .fb-sheet");
+    var leftPage = document.getElementById("fb-left");
+    var allContent = [];
+    for (var k = 0; k < sheets.length; k++) allContent.push(sheets[k].querySelector(".fb-front").innerHTML);
+    var total = {total_pages};
+    var current = 0;
+    var mode = "single";
 
-        <div class="fb-mode-bar">
-            <button class="fb-mode-btn active" id="fb-mode-single" onclick="fbSetMode('single')">📄 단면 보기</button>
-            <button class="fb-mode-btn" id="fb-mode-spread" onclick="fbSetMode('spread')">📖 양면 펼침</button>
-        </div>
-
-        <div class="fb-scene single" id="fb-scene">
-            <div class="fb-spine"></div>
-            <div class="fb-left-page" id="fb-left"></div>
-            {sheets_html}
-        </div>
-
-        <div class="fb-nav">
-            <button class="fb-btn" id="fb-prev" onclick="fbPrev()">◀ 이전</button>
-            <span class="fb-info" id="fb-info">1 / {total_pages}</span>
-            <button class="fb-btn" id="fb-next" onclick="fbNext()">다음 ▶</button>
-        </div>
-
-        <script>
-        (function() {{
-            const scene = document.getElementById('fb-scene');
-            const sheets = document.querySelectorAll('#fb-scene .fb-sheet');
-            const leftPage = document.getElementById('fb-left');
-            const allContent = [];
-            sheets.forEach(s => allContent.push(s.querySelector('.fb-front').innerHTML));
-            const total = {total_pages};
-            let current = 0;
-            let mode = 'single';
-
-            function update() {{
-                sheets.forEach((s, i) => {{
-                    if (i < current) {{
-                        s.classList.add('flipped');
-                        s.style.zIndex = i + 1;
-                    }} else {{
-                        s.classList.remove('flipped');
-                        s.style.zIndex = total - i;
-                    }}
-                }});
-                // 양면 모드: 왼쪽 페이지 업데이트
-                if (mode === 'spread' && current > 0) {{
-                    leftPage.innerHTML = allContent[current - 1];
-                    leftPage.style.display = 'block';
-                }} else if (mode === 'spread' && current === 0) {{
-                    leftPage.innerHTML = '';
-                    leftPage.style.display = 'none';
-                }}
-                document.getElementById('fb-info').textContent = (current + 1) + ' / ' + total;
-                document.getElementById('fb-prev').disabled = (current === 0);
-                document.getElementById('fb-next').disabled = (current >= total - 1);
+    function update() {{
+        for (var i = 0; i < sheets.length; i++) {{
+            if (i < current) {{
+                sheets[i].classList.add("flipped");
+                sheets[i].style.zIndex = i + 1;
+            }} else {{
+                sheets[i].classList.remove("flipped");
+                sheets[i].style.zIndex = total - i;
             }}
+        }}
+        if (mode === "spread" && current > 0) {{
+            leftPage.innerHTML = allContent[current - 1];
+            leftPage.style.display = "block";
+        }} else if (mode === "spread" && current === 0) {{
+            leftPage.innerHTML = "";
+            leftPage.style.display = "none";
+        }}
+        document.getElementById("fb-info").textContent = (current + 1) + " / " + total;
+        document.getElementById("fb-prev").disabled = (current === 0);
+        document.getElementById("fb-next").disabled = (current >= total - 1);
+    }}
 
-            window.fbNext = function() {{
-                if (current < total - 1) {{ current++; update(); }}
-            }};
-            window.fbPrev = function() {{
-                if (current > 0) {{ current--; update(); }}
-            }};
+    window.fbNext = function() {{
+        if (current < total - 1) {{ current++; update(); }}
+    }};
+    window.fbPrev = function() {{
+        if (current > 0) {{ current--; update(); }}
+    }};
+    window.fbSetMode = function(m) {{
+        mode = m;
+        scene.className = "fb-scene " + m;
+        document.getElementById("fb-mode-single").classList.toggle("active", m === "single");
+        document.getElementById("fb-mode-spread").classList.toggle("active", m === "spread");
+        if (m === "single") {{ leftPage.style.display = "none"; }}
+        update();
+    }};
 
-            window.fbSetMode = function(m) {{
-                mode = m;
-                scene.className = 'fb-scene ' + m;
-                document.getElementById('fb-mode-single').classList.toggle('active', m === 'single');
-                document.getElementById('fb-mode-spread').classList.toggle('active', m === 'spread');
-                if (m === 'single') {{ leftPage.style.display = 'none'; }}
-                update();
-            }};
-
-            sheets.forEach((s, i) => {{
-                s.addEventListener('click', function() {{
-                    if (i >= current) window.fbNext();
-                    else window.fbPrev();
-                }});
+    for (var j = 0; j < sheets.length; j++) {{
+        (function(idx) {{
+            sheets[idx].addEventListener("click", function() {{
+                if (idx >= current) window.fbNext();
+                else window.fbPrev();
             }});
+        }})(j);
+    }}
 
-            document.addEventListener('keydown', function(e) {{
-                if (e.key === 'ArrowRight') window.fbNext();
-                else if (e.key === 'ArrowLeft') window.fbPrev();
-            }});
+    document.addEventListener("keydown", function(e) {{
+        if (e.key === "ArrowRight") window.fbNext();
+        else if (e.key === "ArrowLeft") window.fbPrev();
+    }});
 
-            update();
-        }})();
-        </script>
-    </div>'''
+    update();
+}})();
+</script>
+</body></html>'''
+
+    # srcdoc는 작은따옴표로 감싸므로, 내부 HTML의 ' → &#39; 이스케이프
+    srcdoc = inner_html.replace("'", "&#39;")
+    return f"<iframe srcdoc='{srcdoc}' style='width:100%;height:580px;border:none;' sandbox='allow-scripts'></iframe>"
 
 
 # ═══════════════════════════════════════════
