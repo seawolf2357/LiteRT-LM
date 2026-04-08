@@ -945,10 +945,20 @@ def build_viewer_html(story_id):
 # 3D Flipbook Viewer — FLIPBOOK.Main (AI-BOOK 이식)
 # ═══════════════════════════════════════════
 def build_flipbook_html(story_id):
-    """FLIPBOOK.Main 3D 플립북 — FastAPI /viewer/ 라우트를 iframe으로 로드"""
+    """3D 플립북용 페이지 JSON 생성 — gr.HTML의 js_on_load가 FlipBook 초기화"""
     if not story_id:
-        return "<div style='text-align:center;padding:40px;color:#999;'>스토리를 찾을 수 없습니다.</div>"
-    return f'<iframe src="/viewer/{story_id}" style="width:100%;height:700px;border:none;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.08);" allow="fullscreen"></iframe>'
+        return ""
+    try:
+        pdf_path = generate_pdf(story_id)
+        if not pdf_path:
+            logger.warning(f"Flipbook: PDF 생성 실패 story_id={story_id}")
+            return ""
+        pages = pdf_to_page_images(pdf_path)
+        logger.info(f"Flipbook JSON 생성: {len(pages)}페이지, story_id={story_id}")
+        return json.dumps({"pages": pages}, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Flipbook 생성 오류: {e}")
+        return ""
 
 
 
@@ -1132,60 +1142,6 @@ def pdf_to_page_images(pdf_path, scale=1.5, quality=85):
     doc.close()
     logger.info(f"PDF→이미지 변환 완료: {len(pages)}페이지")
     return pages
-
-
-# ═══════════════════════════════════════════
-# FLIPBOOK.Main 뷰어 HTML 생성
-# ═══════════════════════════════════════════
-def _generate_viewer_html(story_id):
-    """FLIPBOOK.Main 뷰어 전체 HTML 문서 생성"""
-    pdf_path = generate_pdf(story_id)
-    if not pdf_path:
-        return "<html><body><p style='text-align:center;padding:60px;color:#999;'>PDF 생성 실패</p></body></html>"
-
-    pages = pdf_to_page_images(pdf_path)
-    pages_json = json.dumps(pages, ensure_ascii=False)
-
-    return f"""<!DOCTYPE html>
-<html><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="/static/flipbook.css">
-<style>
-html,body {{ margin:0;padding:0;overflow:hidden;width:100%;height:100%;background:#f5f0e8; }}
-#flipbook-container {{ width:100%;height:100%; }}
-</style>
-</head><body>
-<div id="flipbook-container"></div>
-<script src="/static/flipbook.js"></script>
-<script>
-document.addEventListener("DOMContentLoaded", function() {{
-    var pages = {pages_json};
-    new FlipBook(document.getElementById("flipbook-container"), {{
-        pages: pages,
-        viewMode: "webgl",
-        skin: "light",
-        startPage: 0,
-        sound: false,
-        backgroundColor: "#f5f0e8",
-        pageFlipDuration: 1,
-        autoplayInterval: 3000,
-        autoplayLoop: true,
-        btnAutoplay: {{ enabled: true }},
-        btnThumbs: {{ enabled: true }},
-        btnZoomIn: {{ enabled: true }},
-        btnZoomOut: {{ enabled: true }},
-        btnExpand: {{ enabled: true }},
-        btnShare: {{ enabled: false }},
-        btnDownloadPdf: {{ enabled: false }},
-        btnPrint: {{ enabled: false }},
-        btnSearch: {{ enabled: false }},
-        btnSound: {{ enabled: false }},
-        btnBookmark: {{ enabled: false }}
-    }});
-}});
-</script>
-</body></html>"""
 
 
 # ═══════════════════════════════════════════
@@ -1536,6 +1492,57 @@ CSS = """
 footer { display:none !important; }
 """
 
+# ═══════════════════════════════════════════
+# FLIPBOOK.Main — gr.HTML head / js_on_load 설정
+# ═══════════════════════════════════════════
+FLIPBOOK_HEAD = """
+<link rel="stylesheet" href="/static/flipbook.css">
+<script src="/static/flipbook.js"></script>
+"""
+
+FLIPBOOK_JS_ON_LOAD = """
+const wrap = element.querySelector('.flipbook-wrap');
+wrap.innerHTML = '<div style="text-align:center;padding:60px;color:#A0896A;"><div style="font-size:48px;margin-bottom:12px;">📕</div>동화를 생성하면 3D 플립북이 여기에 표시됩니다<br><span style="font-size:12px;">클릭 또는 ← → 키로 페이지를 넘길 수 있습니다</span></div>';
+
+let fbInstance = null;
+watch('value', () => {
+    if (!props.value) return;
+    try {
+        const data = JSON.parse(props.value);
+        if (data.pages && data.pages.length > 0) {
+            wrap.innerHTML = '';
+            if (fbInstance) { try { fbInstance.destroy(); } catch(e) {} }
+            fbInstance = new FlipBook(wrap, {
+                pages: data.pages,
+                viewMode: 'webgl',
+                skin: 'light',
+                startPage: 0,
+                sound: false,
+                backgroundColor: '#f5f0e8',
+                pageFlipDuration: 1,
+                autoplayInterval: 3000,
+                autoplayLoop: true,
+                btnAutoplay: { enabled: true },
+                btnThumbs: { enabled: true },
+                btnZoomIn: { enabled: true },
+                btnZoomOut: { enabled: true },
+                btnExpand: { enabled: true },
+                btnShare: { enabled: false },
+                btnDownloadPdf: { enabled: false },
+                btnPrint: { enabled: false },
+                btnSearch: { enabled: false },
+                btnSound: { enabled: false },
+                btnBookmark: { enabled: false }
+            });
+        }
+    } catch(e) {
+        wrap.innerHTML = props.value;
+    }
+});
+"""
+
+FLIPBOOK_TEMPLATE = '<div class="flipbook-wrap" style="width:100%;min-height:700px;background:#f5f0e8;border-radius:8px;display:flex;align-items:center;justify-content:center;"></div>'
+
 HEADER = """
 <div style="text-align:center;padding:32px 16px;background:linear-gradient(135deg,#FFF8EE,#FFF0D6,#FFE8C0);border-radius:18px;margin-bottom:16px;border:1px solid #F0E6D3;">
     <div style="font-size:40px;margin-bottom:6px;">📖✨</div>
@@ -1586,7 +1593,12 @@ with gr.Blocks(title="맞춤형 동화 생성 SaaS") as demo:
             viewer_output = gr.HTML("<div style='text-align:center;padding:60px;color:#A0896A;'><div style='font-size:48px;margin-bottom:12px;'>📖</div>동화를 생성하면 여기에 표시됩니다</div>")
 
         with gr.TabItem("📕 3D 플립북"):
-            flipbook_output = gr.HTML("<div style='text-align:center;padding:60px;color:#A0896A;'><div style='font-size:48px;margin-bottom:12px;'>📕</div>동화를 생성하면 3D 플립북이 여기에 표시됩니다<br><span style='font-size:12px;'>클릭 또는 ← → 키로 페이지를 넘길 수 있습니다</span></div>")
+            flipbook_output = gr.HTML(
+                value="",
+                html_template=FLIPBOOK_TEMPLATE,
+                head=FLIPBOOK_HEAD,
+                js_on_load=FLIPBOOK_JS_ON_LOAD,
+            )
             gr.Markdown("---")
             gr.Markdown("### 📥 PDF 다운로드")
             pdf_btn = gr.Button("📥 최근 동화 PDF 다운로드", variant="secondary")
@@ -1648,7 +1660,12 @@ with gr.Blocks(title="맞춤형 동화 생성 SaaS") as demo:
             loaded_viewer = gr.HTML("<div style='text-align:center;padding:40px;color:#A0896A;'>위에서 동화를 선택하고 '불러오기' 버튼을 누르세요</div>")
             loaded_story = gr.Markdown("*동화를 선택하면 여기에 전문이 표시됩니다.*")
             loaded_verify = gr.JSON(label="검증 결과")
-            loaded_flipbook = gr.HTML("")
+            loaded_flipbook = gr.HTML(
+                value="",
+                html_template=FLIPBOOK_TEMPLATE,
+                head=FLIPBOOK_HEAD,
+                js_on_load=FLIPBOOK_JS_ON_LOAD,
+            )
 
             refresh_btn.click(fn=list_stories, inputs=[], outputs=[story_selector, story_list_info])
             load_btn.click(fn=load_story_from_db, inputs=[story_selector], outputs=[loaded_viewer, loaded_story, loaded_verify, loaded_flipbook])
@@ -1657,23 +1674,16 @@ with gr.Blocks(title="맞춤형 동화 생성 SaaS") as demo:
                        outputs=[viewer_output, story_output, verification_output, gen_log, flipbook_output], show_progress="full")
 
 # ═══════════════════════════════════════════
-# FastAPI 라우트 — 정적 파일 + 플립북 뷰어
+# FastAPI — 정적 파일 서빙 (flipbook.js, flipbook.css 등)
 # ═══════════════════════════════════════════
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
 
 app = demo.app
 
-# 정적 파일 서빙 (flipbook.js, flipbook.css, three.js 등)
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     logger.info(f"정적 파일 서빙: {STATIC_DIR}")
-
-@app.get("/viewer/{story_id}", response_class=HTMLResponse)
-def viewer_page(story_id: str):
-    """FLIPBOOK.Main 3D 뷰어 HTML 페이지"""
-    return _generate_viewer_html(story_id)
 
 
 if __name__ == "__main__":
