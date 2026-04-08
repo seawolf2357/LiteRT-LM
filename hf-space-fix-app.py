@@ -942,197 +942,15 @@ def build_viewer_html(story_id):
 
 
 # ═══════════════════════════════════════════
-# 3D Flipbook Viewer — iframe srcdoc 방식 (Gradio sanitize 우회)
+# 3D Flipbook Viewer — FLIPBOOK.Main (AI-BOOK 이식)
 # ═══════════════════════════════════════════
-def _fb_page_html(p):
-    """플립북 페이지 하나의 HTML 생성 (큰따옴표만 사용)"""
-    if not p:
-        return '<div style="height:100%;background:#FFFBF5;"></div>'
-    img_url = p["image_url"] or ""
-    if img_url:
-        img = f'<img src="{img_url}" style="width:100%;height:62%;object-fit:cover;">'
-    else:
-        img = '<div style="width:100%;height:62%;background:linear-gradient(135deg,#f0e6d3,#e8d5b8);display:flex;align-items:center;justify-content:center;font-size:32px;">&#x1F3A8;</div>'
-    text = (p["text_ko"] or "").replace("'", "&#39;").replace('"', "&quot;")
-    return f'''<div style="height:100%;display:flex;flex-direction:column;background:#FFFBF5;overflow:hidden;">
-        {img}
-        <div style="flex:1;padding:8px 12px;overflow:hidden;">
-            <div style="font-size:8px;color:#8B6914;font-weight:700;margin-bottom:3px;">P{p["page_number"]}</div>
-            <div style="font-family:Georgia,serif;font-size:11.5px;line-height:1.65;color:#3D2B1F;">{text}</div>
-        </div>
-    </div>'''
-
 def build_flipbook_html(story_id):
-    """3D CSS 플립북 — iframe srcdoc로 Gradio sanitize 우회"""
-    with get_db() as conn:
-        story = conn.execute("SELECT * FROM stories WHERE story_id=?", (story_id,)).fetchone()
-        pages = conn.execute("SELECT * FROM pages WHERE story_id=? ORDER BY page_number", (story_id,)).fetchall()
-
-    if not story:
+    """FLIPBOOK.Main 3D 플립북 — FastAPI /viewer/ 라우트를 iframe으로 로드"""
+    if not story_id:
         return "<div style='text-align:center;padding:40px;color:#999;'>스토리를 찾을 수 없습니다.</div>"
+    return f'<iframe src="/viewer/{story_id}" style="width:100%;height:700px;border:none;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.08);" allow="fullscreen"></iframe>'
 
-    # 개별 페이지 콘텐츠: 표지, P1~P15, 뒷표지
-    all_pages = []
 
-    # 표지
-    cover_img = pages[0]["image_url"] if pages and pages[0]["image_url"] else ""
-    title_safe = (story["title"] or "").replace("'", "&#39;").replace('"', "&quot;")
-    theme_safe = (story["theme"] or "").replace("'", "&#39;").replace('"', "&quot;")
-    moral_safe = (story["moral"] or "").replace("'", "&#39;").replace('"', "&quot;")
-    child_safe = (story["child_name"] or "").replace("'", "&#39;").replace('"', "&quot;")
-
-    cover_img_tag = f'<img src="{cover_img}" style="max-width:85%;max-height:50%;border-radius:6px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,0.1);">' if cover_img else ""
-    all_pages.append(f'''<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;
-        background:linear-gradient(135deg,#FFF8EE,#FFF0D6);padding:16px;box-sizing:border-box;">
-        <div style="font-size:10px;color:#8B6914;letter-spacing:3px;margin-bottom:6px;">AXIS Emergence Engine</div>
-        <h1 style="font-family:Georgia,serif;font-size:20px;color:#3D2B1F;margin:0 0 6px;text-align:center;line-height:1.3;">{title_safe}</h1>
-        <p style="font-size:11px;color:#8B7355;margin:0 0 10px;text-align:center;">{theme_safe}</p>
-        {cover_img_tag}
-        <p style="font-size:10px;color:#A0896A;margin-top:auto;">{child_safe}의 이야기</p>
-    </div>''')
-
-    # 본문 15페이지
-    for p in pages:
-        all_pages.append(_fb_page_html(p))
-
-    # 뒷표지
-    all_pages.append(f'''<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;
-        background:linear-gradient(135deg,#FFF0D6,#FFF8EE);padding:16px;box-sizing:border-box;">
-        <div style="font-size:40px;margin-bottom:12px;">&#x1F4D6;</div>
-        <p style="font-family:Georgia,serif;font-size:13px;color:#3D2B1F;text-align:center;line-height:1.8;margin:0 0 12px;">{moral_safe}</p>
-        <div style="font-size:9px;color:#A0896A;">&#x2014; 끝 &#x2014;</div>
-        <div style="margin-top:auto;font-size:8px;color:#C0A87A;">AXIS Engine | Grok Imagine &amp; Kimi-K2.5</div>
-    </div>''')
-
-    total_pages = len(all_pages)
-
-    # 시트 HTML
-    sheets_html = ""
-    for idx in range(total_pages):
-        z = total_pages - idx
-        front = all_pages[idx]
-        back = '<div style="height:100%;background:#FFFBF5;"></div>'
-        sheets_html += f'''<div class="fb-sheet" data-idx="{idx}" style="z-index:{z};">
-            <div class="fb-front">{front}</div>
-            <div class="fb-back">{back}</div>
-        </div>\n'''
-
-    # 완전한 HTML 문서 (iframe 내부용)
-    inner_html = f'''<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<style>
-* {{ margin:0;padding:0;box-sizing:border-box; }}
-body {{ font-family:"Noto Sans KR",sans-serif;background:transparent;display:flex;flex-direction:column;align-items:center;padding:8px;user-select:none; }}
-.fb-mode-bar {{ display:flex;justify-content:center;gap:8px;margin-bottom:10px; }}
-.fb-mode-btn {{ padding:6px 16px;border-radius:16px;border:1.5px solid #8B6914;background:white;color:#8B6914;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s; }}
-.fb-mode-btn.active {{ background:#8B6914;color:white; }}
-.fb-scene {{ perspective:2000px;margin:0 auto;position:relative;transition:width 0.4s,height 0.4s; }}
-.fb-scene.single {{ width:320px;height:440px; }}
-.fb-scene.spread {{ width:640px;height:440px; }}
-.fb-sheet {{ position:absolute;width:320px;height:100%;transform-style:preserve-3d;transform-origin:left center;transition:transform 0.8s cubic-bezier(0.645,0.045,0.355,1.000);cursor:pointer; }}
-.fb-scene.single .fb-sheet {{ width:100%; }}
-.fb-scene.spread .fb-sheet {{ width:320px;left:320px; }}
-.fb-sheet.flipped {{ transform:rotateY(-180deg); }}
-.fb-front,.fb-back {{ position:absolute;width:100%;height:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden;overflow:hidden;border:1px solid #E8D5B8;background:#FFFBF5; }}
-.fb-back {{ transform:rotateY(180deg); }}
-.fb-front::after,.fb-back::after {{ content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to right,rgba(0,0,0,0.05) 0%,transparent 6%,transparent 94%,rgba(0,0,0,0.02) 100%);pointer-events:none; }}
-.fb-left-page {{ position:absolute;left:0;top:0;width:320px;height:100%;background:#FFFBF5;border:1px solid #E8D5B8;overflow:hidden;display:none; }}
-.fb-scene.spread .fb-left-page {{ display:block; }}
-.fb-spine {{ position:absolute;top:0;bottom:0;width:4px;background:linear-gradient(to right,#5C4A2A,#8B6914,#5C4A2A);z-index:9999;box-shadow:0 0 4px rgba(0,0,0,0.3); }}
-.fb-scene.single .fb-spine {{ left:-2px;border-radius:2px 0 0 2px; }}
-.fb-scene.spread .fb-spine {{ left:318px; }}
-.fb-nav {{ display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px; }}
-.fb-btn {{ background:#8B6914;color:white;border:none;padding:7px 18px;border-radius:18px;cursor:pointer;font-size:12px;font-weight:600;transition:background 0.2s; }}
-.fb-btn:hover {{ background:#6B5210; }}
-.fb-btn:disabled {{ background:#C0A87A;cursor:default; }}
-.fb-info {{ font-size:12px;color:#8B7355; }}
-</style></head>
-<body>
-<div class="fb-mode-bar">
-    <button class="fb-mode-btn active" id="fb-mode-single" onclick="fbSetMode('single')">&#x1F4C4; 단면 보기</button>
-    <button class="fb-mode-btn" id="fb-mode-spread" onclick="fbSetMode('spread')">&#x1F4D6; 양면 펼침</button>
-</div>
-<div class="fb-scene single" id="fb-scene">
-    <div class="fb-spine"></div>
-    <div class="fb-left-page" id="fb-left"></div>
-    {sheets_html}
-</div>
-<div class="fb-nav">
-    <button class="fb-btn" id="fb-prev" onclick="fbPrev()">&#x25C0; 이전</button>
-    <span class="fb-info" id="fb-info">1 / {total_pages}</span>
-    <button class="fb-btn" id="fb-next" onclick="fbNext()">다음 &#x25B6;</button>
-</div>
-<script>
-(function() {{
-    var scene = document.getElementById("fb-scene");
-    var sheets = document.querySelectorAll("#fb-scene .fb-sheet");
-    var leftPage = document.getElementById("fb-left");
-    var allContent = [];
-    for (var k = 0; k < sheets.length; k++) allContent.push(sheets[k].querySelector(".fb-front").innerHTML);
-    var total = {total_pages};
-    var current = 0;
-    var mode = "single";
-
-    function update() {{
-        for (var i = 0; i < sheets.length; i++) {{
-            if (i < current) {{
-                sheets[i].classList.add("flipped");
-                sheets[i].style.zIndex = i + 1;
-            }} else {{
-                sheets[i].classList.remove("flipped");
-                sheets[i].style.zIndex = total - i;
-            }}
-        }}
-        if (mode === "spread" && current > 0) {{
-            leftPage.innerHTML = allContent[current - 1];
-            leftPage.style.display = "block";
-        }} else if (mode === "spread" && current === 0) {{
-            leftPage.innerHTML = "";
-            leftPage.style.display = "none";
-        }}
-        document.getElementById("fb-info").textContent = (current + 1) + " / " + total;
-        document.getElementById("fb-prev").disabled = (current === 0);
-        document.getElementById("fb-next").disabled = (current >= total - 1);
-    }}
-
-    window.fbNext = function() {{
-        if (current < total - 1) {{ current++; update(); }}
-    }};
-    window.fbPrev = function() {{
-        if (current > 0) {{ current--; update(); }}
-    }};
-    window.fbSetMode = function(m) {{
-        mode = m;
-        scene.className = "fb-scene " + m;
-        document.getElementById("fb-mode-single").classList.toggle("active", m === "single");
-        document.getElementById("fb-mode-spread").classList.toggle("active", m === "spread");
-        if (m === "single") {{ leftPage.style.display = "none"; }}
-        update();
-    }};
-
-    for (var j = 0; j < sheets.length; j++) {{
-        (function(idx) {{
-            sheets[idx].addEventListener("click", function() {{
-                if (idx >= current) window.fbNext();
-                else window.fbPrev();
-            }});
-        }})(j);
-    }}
-
-    document.addEventListener("keydown", function(e) {{
-        if (e.key === "ArrowRight") window.fbNext();
-        else if (e.key === "ArrowLeft") window.fbPrev();
-    }});
-
-    update();
-}})();
-</script>
-</body></html>'''
-
-    # srcdoc는 작은따옴표로 감싸므로, 내부 HTML의 ' → &#39; 이스케이프
-    srcdoc = inner_html.replace("'", "&#39;")
-    return f"<iframe srcdoc='{srcdoc}' style='width:100%;height:580px;border:none;' sandbox='allow-scripts'></iframe>"
 
 
 # ═══════════════════════════════════════════
@@ -1294,6 +1112,80 @@ def generate_pdf(story_id):
     c.save()
     logger.info(f"PDF 생성 완료: {pdf_path} (210x210mm)")
     return pdf_path
+
+
+# ═══════════════════════════════════════════
+# PDF → Page Images (PyMuPDF)
+# ═══════════════════════════════════════════
+def pdf_to_page_images(pdf_path, scale=1.5, quality=85):
+    """PDF 각 페이지를 base64 JPEG로 변환 — FLIPBOOK.Main 용"""
+    import fitz
+    import base64
+
+    doc = fitz.open(pdf_path)
+    pages = []
+    for page in doc:
+        pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale))
+        img_bytes = pix.tobytes("jpeg", quality)
+        b64 = base64.b64encode(img_bytes).decode()
+        pages.append({"src": f"data:image/jpeg;base64,{b64}", "thumb": ""})
+    doc.close()
+    logger.info(f"PDF→이미지 변환 완료: {len(pages)}페이지")
+    return pages
+
+
+# ═══════════════════════════════════════════
+# FLIPBOOK.Main 뷰어 HTML 생성
+# ═══════════════════════════════════════════
+def _generate_viewer_html(story_id):
+    """FLIPBOOK.Main 뷰어 전체 HTML 문서 생성"""
+    pdf_path = generate_pdf(story_id)
+    if not pdf_path:
+        return "<html><body><p style='text-align:center;padding:60px;color:#999;'>PDF 생성 실패</p></body></html>"
+
+    pages = pdf_to_page_images(pdf_path)
+    pages_json = json.dumps(pages, ensure_ascii=False)
+
+    return f"""<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/static/flipbook.css">
+<style>
+html,body {{ margin:0;padding:0;overflow:hidden;width:100%;height:100%;background:#f5f0e8; }}
+#flipbook-container {{ width:100%;height:100%; }}
+</style>
+</head><body>
+<div id="flipbook-container"></div>
+<script src="/static/flipbook.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {{
+    var pages = {pages_json};
+    new FlipBook(document.getElementById("flipbook-container"), {{
+        pages: pages,
+        viewMode: "webgl",
+        skin: "light",
+        startPage: 0,
+        sound: false,
+        backgroundColor: "#f5f0e8",
+        pageFlipDuration: 1,
+        autoplayInterval: 3000,
+        autoplayLoop: true,
+        btnAutoplay: {{ enabled: true }},
+        btnThumbs: {{ enabled: true }},
+        btnZoomIn: {{ enabled: true }},
+        btnZoomOut: {{ enabled: true }},
+        btnExpand: {{ enabled: true }},
+        btnShare: {{ enabled: false }},
+        btnDownloadPdf: {{ enabled: false }},
+        btnPrint: {{ enabled: false }},
+        btnSearch: {{ enabled: false }},
+        btnSound: {{ enabled: false }},
+        btnBookmark: {{ enabled: false }}
+    }});
+}});
+</script>
+</body></html>"""
 
 
 # ═══════════════════════════════════════════
@@ -1763,6 +1655,26 @@ with gr.Blocks(title="맞춤형 동화 생성 SaaS") as demo:
 
     generate_btn.click(fn=run_pipeline, inputs=[purpose, style, mood, child_name, child_age, child_traits, ref_image],
                        outputs=[viewer_output, story_output, verification_output, gen_log, flipbook_output], show_progress="full")
+
+# ═══════════════════════════════════════════
+# FastAPI 라우트 — 정적 파일 + 플립북 뷰어
+# ═══════════════════════════════════════════
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+
+app = demo.app
+
+# 정적 파일 서빙 (flipbook.js, flipbook.css, three.js 등)
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+if os.path.isdir(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    logger.info(f"정적 파일 서빙: {STATIC_DIR}")
+
+@app.get("/viewer/{story_id}", response_class=HTMLResponse)
+def viewer_page(story_id: str):
+    """FLIPBOOK.Main 3D 뷰어 HTML 페이지"""
+    return _generate_viewer_html(story_id)
+
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=7860, share=False, css=CSS, theme=gr.themes.Soft())

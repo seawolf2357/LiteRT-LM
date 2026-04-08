@@ -2,3 +2,4 @@ gradio
 fal-client
 requests
 reportlab
+PyMuPDF
