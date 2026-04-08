@@ -1,0 +1,11 @@
+gradio
+pillow
+pymupdf
+fastapi
+uvicorn[standard]
+openai
+reportlab
+docx2txt
+fal-client
+requests
+huggingface_hub

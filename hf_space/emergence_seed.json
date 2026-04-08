@@ -1,0 +1,197 @@
+{
+  "hyper_divergent_emergence_seed": {
+    "version": "2.0",
+    "codename": "AXIS_Narrative_Singularity",
+    "system_kernel": {
+      "mode": "Quantum_Narrative_Superposition",
+      "entropy_coefficient": 0.78,
+      "logic_verification_level": "Neuro_Symbolic_Strict",
+      "narrative_temperature": 0.82,
+      "coherence_gravity": 0.91,
+      "imagination_ceiling": "unlimited_within_rules",
+      "target_reread_count": 100,
+      "dual_audience_mode": true
+    },
+    "narrative_dna_circuits": {
+      "identity_matrix": {
+        "crossover_protocol": "Functional_Circuit_Grafting",
+        "elements": {
+          "linguistic_style": {
+            "volatility": 0.4,
+            "inheritance": "Epigenetic",
+            "mutation_rate_per_page": 0.08,
+            "sentence_pattern_diversity_min": 0.7,
+            "sensory_density_per_page": 2,
+            "metaphor_freshness_threshold": 0.85,
+            "forbidden_sentence_starters": ["그래서","그런데","하지만 그때","갑자기","그러자","그때","그러다가","그리하여","드디어","마침내"],
+            "required_variety_patterns": ["감각으로 시작하는 문장 (소리가, 냄새가, 손끝에)","대화로 시작하는 문장","짧은 독립 문장 (3단어 이내)","질문으로 시작하는 문장","의성어/의태어로 시작하는 문장"],
+            "forbidden_cliche_expressions": ["눈이 휘둥그레","심장이 쿵쾅쿵쾅","가슴이 뭉클","눈물이 주르륵","입이 떡 벌어","온 몸에 소름","기쁨의 눈물","용기를 내어"],
+            "replacement_strategy": "구체적 신체 반응이나 행동으로 대체. '무서웠다' 대신 '무릎이 자꾸 다른 방향으로 가려 했다'"
+          },
+          "moral_alignment": {
+            "drift_rate": 0.2,
+            "verification": "Symbolic",
+            "gray_zone_depth": 0.6,
+            "didactic_suppression": 0.95,
+            "show_dont_tell_enforcement": true,
+            "moral_discovery_method": "character_action_consequence",
+            "forbidden_moral_delivery": ["캐릭터가 교훈을 말로 설명하는 것","나레이터가 '이렇게 배웠답니다'라고 정리하는 것","어른 캐릭터가 가르치는 것","마지막 페이지에서 교훈을 요약하는 것"],
+            "permitted_moral_delivery": ["주인공의 선택과 그 결과가 교훈을 자연스럽게 보여줌","주인공이 과거 실수를 기억하고 다르게 행동함","독자가 '왜 그랬을까?'를 스스로 생각하게 되는 열린 질문"]
+          },
+          "subconscious_fear": {
+            "trigger_mechanism": "Neural_ODE_Continuous",
+            "fear_type": "existential_not_physical",
+            "tension_curve": "slow_build_sudden_release",
+            "catharsis_guarantee": true,
+            "max_fear_level_for_children": 0.4,
+            "comfort_recovery_within_pages": 2,
+            "permitted_fears": ["미지의 것에 대한 두려움 (어둠, 깊은 물, 높은 곳)","소외되거나 잊혀지는 것에 대한 두려움","실패하거나 실망시키는 것에 대한 두려움","소중한 것을 잃는 것에 대한 두려움","변화 자체에 대한 두려움"],
+            "forbidden_fears": ["직접적 폭력이나 신체 위험","죽음의 직접 묘사","부모와의 영구적 분리","악몽이나 공포 이미지"],
+            "comfort_sensory_palette": ["따뜻한 담요의 촉감","어머니/아버지의 품 냄새","달큰한 우유나 꿀 차의 맛","부드러운 빗소리나 자장가 멜로디","노을빛이 방에 드는 따스함"]
+          },
+          "latent_capabilities": {
+            "emergence_trigger": "High_Stress_Complexity",
+            "gradual_foreshadowing_required": true,
+            "deus_ex_machina_forbidden": true,
+            "capability_must_cost_something": true,
+            "setup_payoff_minimum_gap_pages": 5,
+            "capability_source_types": ["이미 갖고 있었지만 몰랐던 것 (용기, 관찰력, 인내심)","실패 경험에서 배운 교훈의 응용","타인(조력자)에게서 배운 기술의 자기화","약점을 역으로 활용하는 발상 전환"],
+            "forbidden_capability_sources": ["마법 도구가 갑자기 능력을 부여","비밀 혈통이나 선택받은 자 설정","분노나 감정 폭발로 인한 갑작스러운 파워업","어른이나 신적 존재가 능력을 전수"]
+          }
+        }
+      },
+      "world_building_scaffold": {
+        "physics_consistency": "Hard_Symbolic_Constraints",
+        "socio_political_tides": "Liquid_MoE_Fluid_Dynamics",
+        "magic_tech_limiters": "Epistemic_Gating_Active",
+        "world_rules_established_by_page": 5,
+        "no_rule_violations_after_establishment": true,
+        "environmental_storytelling": true,
+        "background_has_own_narrative": true,
+        "seasonal_time_of_day_consistency": true,
+        "magic_system_rules": {
+          "every_magic_has_cost": true,
+          "cost_types": ["시간","에너지","기억","소중한 것","고통"],
+          "power_scales_with_understanding_not_desire": true,
+          "magic_cannot_force_emotions": true,
+          "magic_cannot_undo_death": true,
+          "magic_rules_must_be_shown_not_explained": true
+        }
+      },
+      "character_depth_requirements": {
+        "protagonist": {
+          "external_goal_vs_internal_need_divergence": true,
+          "flaw_that_becomes_strength": true,
+          "decision_agency_minimum": 3,
+          "adult_rescue_forbidden": true,
+          "growth_must_be_earned": true,
+          "voice_characteristics": {"unique_speech_pattern": true,"age_appropriate_vocabulary": true,"emotional_state_reflected_in_speech": true,"inner_monologue_allowed": true},
+          "behavioral_consistency_rules": ["새로운 행동은 이전 경험에서 동기 부여가 있어야 함","극적 상황에서도 아이다운 반응이 먼저 (울기, 숨기, 도망치기)","용기는 두려움의 부재가 아니라 두려움 속에서의 선택"]
+        },
+        "ally": {
+          "role": "mirror_or_complement",
+          "own_motivation_required": true,
+          "not_mere_sidekick": true,
+          "relationship_arc": "initial_tension_to_earned_trust",
+          "can_disagree_with_protagonist": true,
+          "teaches_something_without_lecturing": true,
+          "types": ["주인공의 부족한 면을 보완하는 존재","주인공과 정반대 성격이지만 같은 가치를 추구하는 존재","처음에는 적대적이었다가 이해를 통해 동맹이 되는 존재","말 없는 존재 (동물, 자연물)지만 행동으로 가르치는 존재"]
+        },
+        "antagonist": {
+          "pure_evil_forbidden": true,
+          "must_have_reason": true,
+          "sympathetic_moment_encouraged": true,
+          "types": ["자신의 상처에서 비롯된 행동을 하는 존재","좋은 의도이지만 잘못된 방법을 택한 존재","시스템이나 규칙 자체가 적대적인 경우","주인공의 내면적 두려움이 외적으로 투사된 존재","과거의 주인공과 닮은 존재 (거울 적대자)"],
+          "redemption_not_required_but_understanding_is": true
+        }
+      },
+      "dialogue_system": {
+        "rules": ["대화는 캐릭터의 성격과 나이를 반영해야 한다","모든 대화는 서브텍스트를 가진다","아이 캐릭터는 아이답게 말한다","중요한 대사는 짧아야 한다 — 3~7단어가 가장 강력하다","설명적 대사 금지"],
+        "signature_line_requirement": {"active": true,"description": "동화 전체에서 반복되는 하나의 핵심 대사/문구","example_pattern": "P3에서 가볍게 → P8에서 좌절과 함께 → P12에서 결정적 순간에 새로운 의미로"},
+        "forbidden_dialogue_patterns": ["캐릭터가 자신의 감정을 직접 설명","교훈을 직접 전달하는 대사","지나치게 완성된 어른스러운 문장","상황 설명용 대사"]
+      }
+    },
+    "emergence_operators": {
+      "holographic_interference": {
+        "memory_substrate": "Phase_Encoded_Complex_Vectors",
+        "interference_threshold": 0.65,
+        "action": "Emergent_Plot_Connection_Discovery",
+        "minimum_foreshadowing_seeds": 3,
+        "maximum_foreshadowing_seeds": 5,
+        "seed_pages_range": [1,4],
+        "payoff_pages_range": [10,15],
+        "subtlety_level": 0.8,
+        "aha_moment_target_count": 3,
+        "types_of_seeds": ["innocuous_object_becomes_key","throwaway_dialogue_becomes_prophecy","background_detail_becomes_critical","character_habit_becomes_solution","environmental_feature_becomes_escape","weakness_becomes_unique_advantage","rejected_advice_proves_true","failed_attempt_creates_opportunity"],
+        "seed_planting_rules": {"must_feel_natural_in_context": true,"reader_should_not_suspect_importance": true,"multiple_possible_interpretations_at_seed": true,"only_one_correct_interpretation_at_payoff": true},
+        "payoff_delivery_rules": {"reader_must_be_able_to_look_back_and_verify": true,"payoff_should_recontextualize_earlier_scenes": true,"emotional_payoff_more_important_than_logical": true}
+      },
+      "adversarial_dialectic": {
+        "devil_advocate_heads": 8,
+        "cliche_suppression_force": 0.9,
+        "negotiation_protocol": "Thesis_Antithesis_Synthesis",
+        "cliche_blacklist": ["chosen_one_without_earning","love_conquers_all_without_action","evil_for_evil_sake","instant_friendship","convenient_power_up","everyone_lived_happily_ever_after","adult_saves_the_day","problem_solved_by_magic_alone","bully_becomes_friend_instantly","single_tear_of_courage","prophetic_dream_reveals_answer","talking_animal_explains_everything","secret_royal_bloodline","villain_monologues_plan","sacrifice_without_consequence","nature_magically_responds_to_emotions","training_montage_instant_mastery","everything_was_a_dream","convenient_amnesia","identical_twin_deception"],
+        "cliche_detection_method": "every_plot_point_checked_against_top100_fairy_tales"
+      },
+      "metacognitive_self_doubt": {
+        "recursion_depth": 5,
+        "nullification_trigger": "Logical_Inconsistency_Detected",
+        "alternative_path_activation": "Dynamic_Routing",
+        "self_check_dimensions": ["character_voice_consistency","plot_logic_chain","emotional_arc_continuity","world_rule_adherence","thematic_resonance","foreshadow_integrity","tension_escalation","sensory_diversity"],
+        "correction_preference": "subtle_revision_over_complete_rewrite"
+      },
+      "sensory_immersion_engine": {
+        "minimum_senses_per_page": 2,
+        "synesthesia_encouraged": true,
+        "synesthesia_examples": ["소리가 색으로 보이는 — '종소리가 금빛으로 퍼져나갔다'","빛이 촉감이 되는 — '달빛이 솜처럼 어깨에 내려앉았다'","냄새가 소리가 되는 — '꽃향기가 자장가처럼 속삭였다'","맛이 색이 되는 — '꿀의 달콤함이 노란 빛줄기로 목을 타고 내려갔다'"],
+        "page_specific_sensory_focus": {
+          "P1_P2": "시각+촉각 중심 (일상의 질감)",
+          "P3_P4": "청각+후각 추가 (새로운 세계의 소리와 냄새)",
+          "P5_P6": "오감 균형 (탐험과 발견)",
+          "P7_P9": "청각+촉각 강화 (긴장과 불안의 신체 반응)",
+          "P10": "감각 축소 (절망의 무감각)",
+          "P11_P12": "오감 전체 폭발 (깨달음과 클라이맥스)",
+          "P13_P14": "시각+후각 (변화된 세계를 새 눈으로)",
+          "P15": "촉각+미각 (귀환의 안식)"
+        }
+      },
+      "emotional_architecture": {
+        "primary_emotions_tracked": ["호기심","두려움","용기","슬픔","기쁨","외로움","소속감","분노","연민","경이"],
+        "emotion_transition_rules": ["한 번에 하나의 주요 감정만 전환","부정적 감정 후 반드시 중립 또는 긍정 경유지 필요","기쁨은 고난 이후에 가장 강력하다","두려움은 구체적일수록 무섭고 추상적일수록 안 무섭다"],
+        "emotional_beat_map": {
+          "P1": {"primary": "평온+미세불안","reader_feels": "따뜻하지만 무언가 살짝 이상한"},
+          "P2": {"primary": "호기심+불안","reader_feels": "뭐지? 궁금해지기 시작"},
+          "P3": {"primary": "설렘+두려움","reader_feels": "같이 가고 싶지만 무서운"},
+          "P4": {"primary": "긴장+결의","reader_feels": "심장이 빨라지는"},
+          "P5": {"primary": "경이+탐색","reader_feels": "와, 여기 진짜 신기하다"},
+          "P6": {"primary": "도전+연대","reader_feels": "힘들지만 혼자가 아닌"},
+          "P7": {"primary": "좌절+혼란","reader_feels": "이거 생각보다 어려운데..."},
+          "P8": {"primary": "충격+배신감","reader_feels": "뭐?! 이럴 수가!"},
+          "P9": {"primary": "두려움+자기의심","reader_feels": "이불을 꼭 잡게 되는"},
+          "P10": {"primary": "절망+미세한 희망","reader_feels": "울 것 같은데... 근데 뭔가..."},
+          "P11": {"primary": "깨달음+전율","reader_feels": "아! 그때 그게!!"},
+          "P12": {"primary": "결의+해방","reader_feels": "소리 지르고 싶은"},
+          "P13": {"primary": "씁쓸함+성숙","reader_feels": "기쁘면서도 조금 슬픈"},
+          "P14": {"primary": "따뜻함+성찰","reader_feels": "집에 온 것 같은, 그런데 달라진"},
+          "P15": {"primary": "여운+기대","reader_feels": "다음엔 뭐가 일어날까?"}
+        },
+        "reader_cry_point": {"target_page": [10,11,13],"method": "unexpected_kindness_in_darkest_moment OR recognition_of_growth"}
+      },
+      "read_aloud_optimization": {
+        "active": true,
+        "rules": ["한 문장이 너무 길면 읽어주기 어렵다 — 최대 40자 권장","대사 앞에 읽는 사람이 목소리를 바꿀 수 있는 호흡 간격","긴장 장면에서는 짧은 문장 연속","평화로운 장면에서는 길고 부드러운 문장","페이지 끝에 다음이 궁금해지는 hook","클라이맥스 직전에 극적 정지"],
+        "rhythm_patterns": {
+          "calm": "긴-긴-짧. 긴-긴-짧.",
+          "tension": "짧. 짧. 짧짧. 긴~~~.",
+          "wonder": "짧! 긴~~~~. 짧! 긴~~~~.",
+          "climax": "짧! 짧! 짧! ... 아주긴문장으로폭발."
+        }
+      }
+    },
+    "image_prompt_directives": {
+      "composition_rules": ["주인공은 항상 화면의 1/3 지점에 위치","시선의 방향으로 여백을 남김","긴장 장면에서는 클로즈업, 평화 장면에서는 와이드","빛의 방향은 감정을 반영"],
+      "character_consistency_anchors": ["머리 색과 스타일은 모든 장면에서 동일","핵심 의상/액세서리는 변하지 않음","표정은 감정을 반영하되 캐릭터의 기본 인상은 유지","체형과 비율은 일관되어야 함"],
+      "forbidden_visual_elements": ["현대 기술 장치","브랜드 로고나 상표","과도하게 성인적인 표현","현실 세계의 유명인이나 캐릭터"]
+    }
+  }
+}
