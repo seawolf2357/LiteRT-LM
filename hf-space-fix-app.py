@@ -32,7 +32,7 @@ FAL_KEY = os.getenv("FAL_KEY", "")
 DB_PATH = "fairytale.db"
 
 # HF 데이터셋 — PDF 영구 저장
-HF_BOOK_REPO = "Heartsync/KID-books"
+HF_BOOK_REPO = "FINAL-BENCH/KID-books"
 HF_TOKEN = os.getenv("HF_TOKEN", "")
 
 # ═══════════════════════════════════════════
