@@ -1436,1002 +1436,486 @@ MAIN_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AXIS Fairy Tale Engine + 3D FlipBook</title>
+<title>AI FlipBook - Fairy Tale Engine</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+<link rel="stylesheet" href="/static/flipbook.css"/>
+<script src="/static/three.js"></script>
+<script src="/static/iscroll.js"></script>
+<script src="/static/mark.js"></script>
+<script src="/static/mod3d.js"></script>
+<script src="/static/pdf.js"></script>
+<script src="/static/flipbook.js"></script>
+<script src="/static/flipbook.book3.js"></script>
+<script src="/static/flipbook.scroll.js"></script>
+<script src="/static/flipbook.swipe.js"></script>
+<script src="/static/flipbook.webgl.js"></script>
 <style>
-/* ===== RESET & BASE ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-    font-family: 'Comic Neue', 'Segoe UI', sans-serif;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-    color: #f0f0f0;
-    overflow-x: hidden;
-    min-height: 100vh;
-}
-h1, h2, h3, h4, h5 { font-family: 'Bangers', 'Comic Neue', cursive; letter-spacing: 1px; }
+body { font-family: 'Comic Neue', sans-serif; overflow: hidden; background: #FFF; }
+h1,h2,h3 { font-family: 'Bangers', cursive; letter-spacing: 1px; }
 
-/* ===== COMIC STYLE VARIABLES ===== */
-:root {
-    --yellow: #FACC15;
-    --blue: #3B82F6;
-    --purple: #8B5CF6;
-    --red: #EF4444;
-    --dark: #1F2937;
-    --border-w: 3px;
-    --shadow: 3px 3px 0 #1F2937;
-    --radius: 10px;
-}
-
-/* ===== TOP HEADER ===== */
-.top-header {
-    background: linear-gradient(90deg, var(--purple), var(--blue));
-    border-bottom: 4px solid var(--dark);
-    padding: 12px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    z-index: 100;
-    position: relative;
-}
-.top-header h1 {
-    font-size: 1.6rem;
-    color: var(--yellow);
-    text-shadow: 2px 2px 0 var(--dark);
-}
-.top-header .subtitle {
-    font-size: 0.85rem;
-    color: rgba(255,255,255,0.8);
-    font-family: 'Comic Neue', sans-serif;
-}
-
-/* ===== MAIN LAYOUT ===== */
-.main-container {
-    display: flex;
-    height: calc(100vh - 60px);
-    position: relative;
-}
-
-/* ===== FLIPBOOK VIEWER ===== */
 #viewer {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    overflow: hidden;
-    background: radial-gradient(ellipse at center, #1a1a3e 0%, #0d0d2b 100%);
-}
-#viewer canvas { max-width: 100%; max-height: 100%; }
-.viewer-controls {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 12px;
-    z-index: 10;
-}
-.viewer-controls button {
-    background: var(--blue);
-    color: white;
-    border: var(--border-w) solid var(--dark);
-    border-radius: var(--radius);
-    padding: 10px 20px;
-    font-family: 'Bangers', cursive;
-    font-size: 1rem;
-    cursor: pointer;
-    box-shadow: var(--shadow);
-    transition: transform 0.1s, box-shadow 0.1s;
-}
-.viewer-controls button:hover {
-    transform: translate(-1px, -1px);
-    box-shadow: 4px 4px 0 var(--dark);
-}
-.viewer-controls button:active {
-    transform: translate(1px, 1px);
-    box-shadow: 1px 1px 0 var(--dark);
-}
-.page-indicator {
-    position: absolute;
-    bottom: 70px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0,0,0,0.7);
-    color: var(--yellow);
-    padding: 6px 16px;
-    border-radius: 20px;
-    font-family: 'Bangers', cursive;
-    font-size: 0.95rem;
-    z-index: 10;
-}
-#loading-overlay {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(15,15,40,0.9);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 50;
-}
-#loading-overlay .spinner {
-    width: 50px; height: 50px;
-    border: 4px solid rgba(255,255,255,0.2);
-    border-top: 4px solid var(--yellow);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-#loading-overlay p {
-    margin-top: 16px;
-    color: var(--yellow);
-    font-family: 'Bangers', cursive;
-    font-size: 1.2rem;
+  width: 96%;
+  height: 92vh;
+  max-width: 96%;
+  margin: 0;
+  background: #fff;
+  border: 4px solid #1F2937;
+  border-radius: 16px;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  overflow: hidden;
 }
 
-/* ===== FLOATING BUTTONS ===== */
-.float-btn {
-    position: fixed;
-    width: 56px; height: 56px;
-    border-radius: 50%;
-    border: 3px solid var(--dark);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 1.5rem;
-    z-index: 200;
-    box-shadow: var(--shadow);
-    transition: transform 0.2s;
-}
-.float-btn:hover { transform: scale(1.1); }
-
-/* Story creation button (left) */
-#btn-story-create {
-    bottom: 24px;
-    left: 24px;
-    background: linear-gradient(135deg, var(--purple), var(--blue));
-    color: var(--yellow);
+.flipbook-container .fb3d-menu-bar {
+  z-index: 2000 !important;
+  opacity: 1 !important;
+  bottom: 0 !important;
+  background: linear-gradient(135deg, #FACC15 0%, #F59E0B 100%) !important;
+  border-top: 3px solid #1F2937 !important;
+  border-radius: 0 0 16px 16px !important;
+  padding: 12px 0 !important;
 }
 
-/* Chat button (right) */
-#btn-chat {
-    bottom: 24px;
-    right: 24px;
-    background: linear-gradient(135deg, var(--blue), var(--purple));
-    color: white;
+.flipbook-container .fb3d-menu-bar > ul > li > img,
+.flipbook-container .fb3d-menu-bar > ul > li > div {
+  opacity: 1 !important;
+  transform: scale(1.2) !important;
+  filter: drop-shadow(2px 2px 0 #1F2937) !important;
 }
 
-/* PDF switch buttons */
-.pdf-switch-btns {
-    position: fixed;
-    top: 80px;
-    right: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 200;
+.loading-container {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center; background: #FFF;
+  border: 4px solid #1F2937; padding: 40px;
+  border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  z-index: 9999;
 }
-.pdf-switch-btns button {
-    background: var(--dark);
-    color: var(--yellow);
-    border: 2px solid var(--yellow);
-    border-radius: 8px;
-    padding: 8px 14px;
-    font-family: 'Comic Neue', sans-serif;
-    font-size: 0.8rem;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: var(--shadow);
-    transition: background 0.2s;
+.loading-spinner {
+  border: 5px solid #FEF9C3; border-top: 5px solid #3B82F6;
+  border-radius: 50%; width: 55px; height: 55px;
+  margin: 0 auto; animation: spin 1s linear infinite;
 }
-.pdf-switch-btns button:hover { background: var(--purple); }
-.pdf-switch-btns button.active { background: var(--blue); border-color: white; }
+.loading-text {
+  margin-top: 20px; font-family: 'Bangers', cursive;
+  font-size: 1.3rem; color: #1F2937; letter-spacing: 1px;
+}
+.progress-bar-container {
+  width: 220px; height: 20px; background: #FEF9C3;
+  border: 3px solid #1F2937; border-radius: 10px;
+  margin-top: 15px; overflow: hidden;
+}
+.progress-bar {
+  height: 100%; background: linear-gradient(to right, #3B82F6, #8B5CF6);
+  border-radius: 7px; transition: width 0.3s ease;
+}
+@keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
 
-/* Gallery button */
-#btn-gallery {
-    bottom: 90px;
-    left: 24px;
-    background: linear-gradient(135deg, var(--yellow), #f59e0b);
-    color: var(--dark);
-    font-size: 1.3rem;
+/* Floating Buttons */
+.floating-btn {
+  position: fixed; z-index: 5000; width: 50px; height: 50px;
+  border-radius: 50%; border: 3px solid #1F2937;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 20px;
+  box-shadow: 3px 3px 0 #1F2937; transition: all 0.2s;
 }
-
-/* ===== SLIDE PANELS ===== */
-.slide-panel {
-    position: fixed;
-    top: 0;
-    height: 100vh;
-    width: 400px;
-    max-width: 90vw;
-    background: linear-gradient(180deg, #1e1e3f 0%, #151530 100%);
-    border: 3px solid var(--dark);
-    z-index: 300;
-    transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+.floating-btn:hover {
+  transform: translate(-2px,-2px); box-shadow: 5px 5px 0 #1F2937;
 }
-.slide-panel.left { left: 0; transform: translateX(-110%); border-right: 4px solid var(--purple); }
-.slide-panel.left.open { transform: translateX(0); }
-.slide-panel.right { right: 0; transform: translateX(110%); border-left: 4px solid var(--blue); }
-.slide-panel.right.open { transform: translateX(0); }
-
-.panel-header {
-    padding: 16px 20px;
-    background: linear-gradient(90deg, var(--purple), var(--blue));
-    border-bottom: 3px solid var(--dark);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+#btnCreateStory {
+  bottom: 20px; left: 20px;
+  background: linear-gradient(135deg, #8B5CF6, #A855F7); color: #FFF;
 }
-.panel-header h2 {
-    font-size: 1.3rem;
-    color: var(--yellow);
-    text-shadow: 1px 1px 0 var(--dark);
+#btnGallery {
+  bottom: 80px; left: 20px;
+  background: linear-gradient(135deg, #3B82F6, #60A5FA); color: #FFF;
 }
-.panel-close {
-    background: var(--red);
-    color: white;
-    border: 2px solid var(--dark);
-    border-radius: 50%;
-    width: 32px; height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 1rem;
-    box-shadow: 2px 2px 0 var(--dark);
-}
-.panel-body { flex: 1; overflow-y: auto; padding: 20px; }
-
-/* ===== STORY CREATION FORM ===== */
-.form-group {
-    margin-bottom: 16px;
-}
-.form-group label {
-    display: block;
-    font-family: 'Bangers', cursive;
-    font-size: 0.95rem;
-    color: var(--yellow);
-    margin-bottom: 6px;
-    letter-spacing: 0.5px;
-}
-.form-group input,
-.form-group textarea,
-.form-group select {
-    width: 100%;
-    padding: 10px 14px;
-    background: rgba(255,255,255,0.08);
-    border: 2px solid rgba(255,255,255,0.15);
-    border-radius: 8px;
-    color: #f0f0f0;
-    font-family: 'Comic Neue', sans-serif;
-    font-size: 0.95rem;
-    outline: none;
-    transition: border-color 0.2s;
-}
-.form-group input:focus,
-.form-group textarea:focus,
-.form-group select:focus {
-    border-color: var(--purple);
-}
-.form-group textarea { resize: vertical; min-height: 70px; }
-.form-group select option { background: #1e1e3f; color: #f0f0f0; }
-
-.btn-submit {
-    width: 100%;
-    padding: 14px;
-    background: linear-gradient(90deg, var(--purple), var(--blue));
-    color: white;
-    border: 3px solid var(--dark);
-    border-radius: var(--radius);
-    font-family: 'Bangers', cursive;
-    font-size: 1.2rem;
-    cursor: pointer;
-    box-shadow: var(--shadow);
-    transition: transform 0.1s;
-    letter-spacing: 1px;
-}
-.btn-submit:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--dark); }
-.btn-submit:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--dark); }
-.btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-
-/* Progress display */
-.progress-box {
-    margin-top: 20px;
-    padding: 16px;
-    background: rgba(0,0,0,0.3);
-    border: 2px solid var(--purple);
-    border-radius: var(--radius);
-    display: none;
-}
-.progress-box.visible { display: block; }
-.progress-bar-outer {
-    height: 12px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 6px;
-    overflow: hidden;
-    margin: 10px 0;
-}
-.progress-bar-inner {
-    height: 100%;
-    background: linear-gradient(90deg, var(--purple), var(--blue), var(--yellow));
-    border-radius: 6px;
-    transition: width 0.5s ease;
-    width: 0%;
-}
-.progress-status {
-    font-size: 0.85rem;
-    color: var(--yellow);
-    font-family: 'Comic Neue', sans-serif;
+#btnSwitchPdf {
+  bottom: 140px; left: 20px;
+  background: linear-gradient(135deg, #FACC15, #F59E0B); color: #1F2937;
 }
 
-/* ===== CHAT PANEL ===== */
-.chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+/* Story creation panel */
+#storyPanel {
+  position: fixed; top: 0; left: 0; width: 380px; height: 100%;
+  background: #FFF; border-right: 4px solid #1F2937;
+  z-index: 6000; transform: translateX(-100%);
+  transition: transform 0.3s; overflow-y: auto; padding: 20px;
 }
-.chat-msg {
-    max-width: 85%;
-    padding: 10px 14px;
-    border-radius: 12px;
-    font-size: 0.9rem;
-    line-height: 1.5;
-    border: 2px solid var(--dark);
+#storyPanel.open { transform: translateX(0); }
+#storyPanel h2 { color: #1F2937; margin-bottom: 16px; font-size: 1.5rem; }
+#storyPanel label { display: block; margin-top: 12px; font-weight: 700; color: #374151; font-size: 0.9rem; }
+#storyPanel input, #storyPanel select, #storyPanel textarea {
+  width: 100%; padding: 10px; border: 3px solid #1F2937;
+  border-radius: 8px; font-family: 'Comic Neue', sans-serif;
+  font-size: 0.95rem; margin-top: 4px;
 }
-.chat-msg.user {
-    align-self: flex-end;
-    background: var(--blue);
-    color: white;
-    border-bottom-right-radius: 4px;
+#storyPanel textarea { height: 70px; resize: vertical; }
+#storyPanel .btn-generate {
+  width: 100%; margin-top: 20px; padding: 14px;
+  background: linear-gradient(135deg, #8B5CF6, #A855F7);
+  color: #FFF; border: 3px solid #1F2937; border-radius: 12px;
+  font-family: 'Bangers', cursive; font-size: 1.2rem; letter-spacing: 1px;
+  cursor: pointer; box-shadow: 3px 3px 0 #1F2937;
 }
-.chat-msg.assistant {
-    align-self: flex-start;
-    background: rgba(139,92,246,0.3);
-    color: #e0e0e0;
-    border-bottom-left-radius: 4px;
+#storyPanel .btn-generate:hover {
+  transform: translate(-2px,-2px); box-shadow: 5px 5px 0 #1F2937;
 }
-.chat-input-area {
-    padding: 12px 16px;
-    border-top: 3px solid var(--dark);
-    display: flex;
-    gap: 8px;
+#storyPanel .btn-close {
+  position: absolute; top: 15px; right: 15px; background: #FFF;
+  border: 3px solid #1F2937; border-radius: 8px; width: 36px; height: 36px;
+  cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;
 }
-.chat-input-area input {
-    flex: 1;
-    padding: 10px 14px;
-    background: rgba(255,255,255,0.08);
-    border: 2px solid rgba(255,255,255,0.15);
-    border-radius: 8px;
-    color: #f0f0f0;
-    font-family: 'Comic Neue', sans-serif;
-    font-size: 0.9rem;
-    outline: none;
-}
-.chat-input-area input:focus { border-color: var(--blue); }
-.chat-input-area button {
-    padding: 10px 18px;
-    background: var(--blue);
-    color: white;
-    border: 2px solid var(--dark);
-    border-radius: 8px;
-    font-family: 'Bangers', cursive;
-    cursor: pointer;
-    box-shadow: 2px 2px 0 var(--dark);
-}
+#progressArea { margin-top: 16px; display: none; }
+#progressArea .progress-bar-container { width: 100%; }
 
-/* ===== GALLERY OVERLAY ===== */
-#gallery-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(10,10,30,0.95);
-    z-index: 400;
-    display: none;
-    flex-direction: column;
-    overflow: hidden;
+/* Gallery overlay */
+#galleryOverlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85); z-index: 7000;
+  display: none; overflow-y: auto; padding: 40px 20px;
 }
-#gallery-overlay.open { display: flex; }
-.gallery-header {
-    padding: 16px 24px;
-    background: linear-gradient(90deg, var(--purple), var(--blue));
-    border-bottom: 4px solid var(--dark);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+#galleryOverlay h2 { text-align: center; color: #FACC15; font-size: 2rem; margin-bottom: 24px; }
+.gallery-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px; max-width: 900px; margin: 0 auto;
 }
-.gallery-header h2 {
-    font-family: 'Bangers', cursive;
-    font-size: 1.5rem;
-    color: var(--yellow);
-    text-shadow: 2px 2px 0 var(--dark);
-}
-.gallery-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 24px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 20px;
-    align-content: start;
-}
-
-/* Story Cards */
 .story-card {
-    background: linear-gradient(145deg, #1e1e3f, #252550);
-    border: 3px solid var(--dark);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: var(--shadow);
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
+  background: #FFF; border: 3px solid #1F2937; border-radius: 12px;
+  overflow: hidden; cursor: pointer; transition: all 0.2s;
+  box-shadow: 3px 3px 0 #1F2937;
 }
-.story-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 5px 5px 0 var(--dark);
+.story-card:hover { transform: translate(-2px,-2px); box-shadow: 5px 5px 0 #1F2937; }
+.story-card img { width: 100%; height: 150px; object-fit: cover; }
+.story-card .card-info { padding: 10px; }
+.story-card .card-title { font-family: 'Bangers', cursive; font-size: 1rem; color: #1F2937; }
+.story-card .card-meta { font-size: 0.75rem; color: #6B7280; margin-top: 4px; }
+.gallery-close {
+  position: fixed; top: 20px; right: 20px; z-index: 7001;
+  background: #FFF; border: 3px solid #1F2937; border-radius: 50%;
+  width: 44px; height: 44px; cursor: pointer; font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
 }
-.story-card .card-thumb {
-    width: 100%;
-    height: 180px;
-    background: linear-gradient(135deg, #2a2a5a, #1a1a3e);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-}
-.story-card .card-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-.story-card .card-thumb .placeholder {
-    font-size: 3rem;
-    opacity: 0.3;
-}
-.story-card .card-body {
-    padding: 14px;
-}
-.story-card .card-title {
-    font-family: 'Bangers', cursive;
-    font-size: 1.1rem;
-    color: var(--yellow);
-    margin-bottom: 6px;
-}
-.story-card .card-meta {
-    font-size: 0.8rem;
-    color: rgba(255,255,255,0.6);
-    margin-bottom: 8px;
-}
-.story-card .card-status {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 700;
-}
-.card-status.complete { background: #22c55e; color: var(--dark); }
-.card-status.generating { background: var(--yellow); color: var(--dark); }
-.card-status.error { background: var(--red); color: white; }
-.card-status.queued { background: var(--purple); color: white; }
-.story-card .card-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 10px;
-}
-.story-card .card-actions button {
-    flex: 1;
-    padding: 8px;
-    border: 2px solid var(--dark);
-    border-radius: 8px;
-    font-family: 'Comic Neue', sans-serif;
-    font-size: 0.8rem;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 2px 2px 0 var(--dark);
-}
-.card-actions .btn-view { background: var(--blue); color: white; }
-.card-actions .btn-download { background: var(--yellow); color: var(--dark); }
 
-/* ===== RESPONSIVE ===== */
+/* PDF Switch popup */
+#pdfSwitchPopup {
+  position: fixed; bottom: 200px; left: 20px; z-index: 5001;
+  background: #FFF; border: 3px solid #1F2937; border-radius: 12px;
+  padding: 12px; display: none; box-shadow: 4px 4px 0 #1F2937;
+}
+#pdfSwitchPopup button {
+  display: block; width: 100%; padding: 8px 16px; margin: 4px 0;
+  background: #FEF9C3; border: 2px solid #1F2937; border-radius: 8px;
+  font-family: 'Comic Neue', sans-serif; font-weight: 700;
+  cursor: pointer; text-align: left;
+}
+#pdfSwitchPopup button:hover { background: #FACC15; }
+#pdfSwitchPopup button.active { background: #3B82F6; color: #FFF; }
+
 @media (max-width: 768px) {
-    .slide-panel { width: 100vw; max-width: 100vw; }
-    .gallery-body { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
-    .top-header h1 { font-size: 1.2rem; }
+  #storyPanel { width: 100%; }
+  #viewer { width: 100%; height: 94vh; border-radius: 0; border-width: 2px; }
+  .floating-btn { width: 42px; height: 42px; font-size: 16px; }
 }
 </style>
 </head>
 <body>
+  <div id="viewer"></div>
 
-<!-- TOP HEADER -->
-<div class="top-header">
-    <div>
-        <h1>AXIS Fairy Tale Engine</h1>
-        <div class="subtitle">3D FlipBook PDF Viewer + AI Story Generator</div>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center;">
-        <span style="font-size:0.8rem;color:rgba(255,255,255,0.6);"></span>
-    </div>
-</div>
+  <!-- Floating Buttons -->
+  <div id="btnCreateStory" class="floating-btn" onclick="toggleStoryPanel()" title="Create Story"><i class="fas fa-magic"></i></div>
+  <div id="btnGallery" class="floating-btn" onclick="toggleGallery()" title="My Stories"><i class="fas fa-book-open"></i></div>
+  <div id="btnSwitchPdf" class="floating-btn" onclick="togglePdfSwitch()" title="Switch PDF"><i class="fas fa-file-pdf"></i></div>
 
-<!-- MAIN CONTAINER -->
-<div class="main-container">
-    <!-- FLIPBOOK VIEWER -->
-    <div id="viewer">
-        <div id="loading-overlay">
-            <div class="spinner"></div>
-            <p>Loading FlipBook...</p>
-        </div>
-        <canvas id="flipbook-canvas"></canvas>
-        <div class="page-indicator" id="page-indicator">Page 1 / 1</div>
-        <div class="viewer-controls">
-            <button onclick="flipPrev()">&#9664; Prev</button>
-            <button onclick="flipNext()">Next &#9654;</button>
-        </div>
-    </div>
-</div>
+  <!-- PDF Switch Popup -->
+  <div id="pdfSwitchPopup"></div>
 
-<!-- FLOATING BUTTONS -->
-<div class="float-btn" id="btn-story-create" onclick="toggleStoryPanel()" title="Create Fairy Tale">&#10024;</div>
-<div class="float-btn" id="btn-gallery" onclick="toggleGallery()" title="Story Gallery">&#128218;</div>
-<div class="float-btn" id="btn-chat" onclick="toggleChatPanel()" title="AI Chat">&#128172;</div>
+  <!-- Story Creation Panel -->
+  <div id="storyPanel">
+    <button class="btn-close" onclick="toggleStoryPanel()"><i class="fas fa-times"></i></button>
+    <h2><i class="fas fa-magic"></i> Create Fairy Tale</h2>
+    <label>Story Purpose</label>
+    <textarea id="inp-purpose" placeholder="e.g. A story about courage and friendship"></textarea>
+    <label>Art Style</label>
+    <select id="inp-style">
+      <option value="watercolor fairytale">Watercolor</option>
+      <option value="cartoon animation">Cartoon</option>
+      <option value="oil painting classic">Oil Painting</option>
+      <option value="pencil sketch">Pencil Sketch</option>
+      <option value="digital illustration">Digital Art</option>
+    </select>
+    <label>Mood</label>
+    <select id="inp-mood">
+      <option value="warm and cozy">Warm & Cozy</option>
+      <option value="exciting adventure">Adventure</option>
+      <option value="mysterious and magical">Mysterious</option>
+      <option value="funny and playful">Funny</option>
+      <option value="calm and peaceful">Peaceful</option>
+    </select>
+    <label>Child Name</label>
+    <input id="inp-name" placeholder="e.g. Haneul" value="Haneul"/>
+    <label>Age</label>
+    <input id="inp-age" type="number" value="6" min="3" max="12"/>
+    <label>Character Traits</label>
+    <textarea id="inp-traits" placeholder="e.g. Curious, loves animals"></textarea>
+    <button class="btn-generate" onclick="startGeneration()"><i class="fas fa-wand-magic-sparkles"></i> Generate Story!</button>
+    <div id="progressArea">
+      <p id="progressText" style="font-weight:700;margin-bottom:8px;color:#374151;">Starting...</p>
+      <div class="progress-bar-container"><div id="progressBar" class="progress-bar" style="width:0%"></div></div>
+    </div>
+  </div>
 
-<!-- PDF SWITCH BUTTONS -->
-<div class="pdf-switch-btns" id="pdf-switch-btns"></div>
-
-<!-- STORY CREATION PANEL (LEFT) -->
-<div class="slide-panel left" id="story-panel">
-    <div class="panel-header">
-        <h2>&#10024; Create Fairy Tale</h2>
-        <div class="panel-close" onclick="toggleStoryPanel()">&#10005;</div>
-    </div>
-    <div class="panel-body">
-        <div class="form-group">
-            <label>Purpose / Theme (목적/주제)</label>
-            <textarea id="inp-purpose" placeholder="예: 용기와 우정에 대한 이야기, 어둠을 두려워하는 아이를 위한 이야기">용기와 우정에 대한 이야기</textarea>
-        </div>
-        <div class="form-group">
-            <label>Illustration Style (스타일)</label>
-            <select id="inp-style">
-                <option value="수채화 동화">수채화 동화</option>
-                <option value="파스텔 일러스트">파스텔 일러스트</option>
-                <option value="만화 스타일">만화 스타일</option>
-                <option value="유화풍">유화풍</option>
-                <option value="연필 스케치">연필 스케치</option>
-                <option value="팝아트">팝아트</option>
-                <option value="동양화">동양화</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Mood (분위기)</label>
-            <select id="inp-mood">
-                <option value="따뜻하고 포근한">따뜻하고 포근한</option>
-                <option value="신비롭고 몽환적인">신비롭고 몽환적인</option>
-                <option value="밝고 유쾌한">밝고 유쾌한</option>
-                <option value="모험적이고 용감한">모험적이고 용감한</option>
-                <option value="잔잔하고 서정적인">잔잔하고 서정적인</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Child's Name (이름)</label>
-            <input type="text" id="inp-child-name" placeholder="하늘" value="하늘"/>
-        </div>
-        <div class="form-group">
-            <label>Child's Age (나이)</label>
-            <input type="number" id="inp-child-age" min="3" max="12" value="7"/>
-        </div>
-        <div class="form-group">
-            <label>Child's Traits (특성)</label>
-            <textarea id="inp-child-traits" placeholder="예: 호기심 많고, 동물을 좋아하고, 가끔 겁이 많은">호기심 많고 상상력이 풍부한</textarea>
-        </div>
-        <button class="btn-submit" id="btn-generate" onclick="startGeneration()">&#9889; Generate Fairy Tale</button>
-
-        <div class="progress-box" id="progress-box">
-            <div class="progress-status" id="progress-status">Waiting...</div>
-            <div class="progress-bar-outer">
-                <div class="progress-bar-inner" id="progress-bar"></div>
-            </div>
-            <div id="progress-detail" style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin-top:8px;"></div>
-        </div>
-    </div>
-</div>
-
-<!-- CHAT PANEL (RIGHT) -->
-<div class="slide-panel right" id="chat-panel">
-    <div class="panel-header">
-        <h2>&#128172; AI Chat</h2>
-        <div class="panel-close" onclick="toggleChatPanel()">&#10005;</div>
-    </div>
-    <div class="chat-messages" id="chat-messages">
-        <div class="chat-msg assistant">PDF 페이지에 대해 질문해 주세요! 현재 보고 있는 페이지를 분석하고 답변해 드립니다.</div>
-    </div>
-    <div class="chat-input-area">
-        <input type="text" id="chat-input" placeholder="질문을 입력하세요..." onkeydown="if(event.key==='Enter')sendChat()"/>
-        <button onclick="sendChat()">Send</button>
-    </div>
-</div>
-
-<!-- GALLERY OVERLAY -->
-<div id="gallery-overlay">
-    <div class="gallery-header">
-        <h2>&#128218; My Fairy Tales</h2>
-        <div class="panel-close" onclick="toggleGallery()">&#10005;</div>
-    </div>
-    <div class="gallery-body" id="gallery-body">
-        <!-- Cards injected by JS -->
-    </div>
-</div>
+  <!-- Gallery Overlay -->
+  <div id="galleryOverlay">
+    <button class="gallery-close" onclick="toggleGallery()"><i class="fas fa-times"></i></button>
+    <h2>My Stories</h2>
+    <div id="galleryGrid" class="gallery-grid"></div>
+  </div>
 
 <script>
-// ===== STATE =====
-let currentPdfKey = 'prompt';
-let flipPages = [];
-let currentPageIdx = 0;
-let currentStoryId = null;
-let pollingTimer = null;
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/pdf.worker.js';
 
-// ===== PANEL TOGGLES =====
-function toggleStoryPanel() {
-    document.getElementById('story-panel').classList.toggle('open');
-    document.getElementById('chat-panel').classList.remove('open');
-    document.getElementById('gallery-overlay').classList.remove('open');
+var fb = null;
+var viewer = document.getElementById('viewer');
+var currentPdfKey = 'prompt';
+var audioInitialized = false;
+
+// ===== Audio init =====
+function initAudio() {
+  if (audioInitialized) return;
+  var a = new Audio('/static/turnPage2.mp3');
+  a.volume = 0.01;
+  a.play().then(function() { a.pause(); audioInitialized = true; }).catch(function(){});
 }
-function toggleChatPanel() {
-    document.getElementById('chat-panel').classList.toggle('open');
-    document.getElementById('story-panel').classList.remove('open');
-    document.getElementById('gallery-overlay').classList.remove('open');
+document.addEventListener('click', initAudio, {once: true});
+
+// ===== Loading =====
+function showLoading(msg) {
+  hideLoading();
+  var c = document.createElement('div');
+  c.className = 'loading-container'; c.id = 'loadingContainer';
+  c.innerHTML = '<div class="loading-spinner"></div><p class="loading-text">' + (msg||'Loading...') + '</p><div class="progress-bar-container"><div id="loadProgressBar" class="progress-bar" style="width:0%"></div></div>';
+  document.body.appendChild(c);
 }
-function toggleGallery() {
-    const g = document.getElementById('gallery-overlay');
-    g.classList.toggle('open');
-    document.getElementById('story-panel').classList.remove('open');
-    document.getElementById('chat-panel').classList.remove('open');
-    if (g.classList.contains('open')) loadGallery();
+function updateLoading(msg, pct) {
+  var t = document.querySelector('.loading-text'); if(t) t.textContent = msg;
+  var b = document.getElementById('loadProgressBar'); if(b && pct!==undefined) b.style.width = pct+'%';
+}
+function hideLoading() {
+  var c = document.getElementById('loadingContainer'); if(c) c.remove();
 }
 
-// ===== FLIPBOOK RENDERING =====
-function renderPage() {
-    // For story flipbook pages (loaded all at once)
-    if (flipPages.length > 0) {
-        renderPageFromB64(flipPages[currentPageIdx]);
-        return;
+// ===== Create FlipBook =====
+function createFlipBook(pages) {
+  try {
+    if (fb) { viewer.innerHTML = ''; fb = null; }
+    var ww = window.innerWidth, wh = window.innerHeight;
+    var ar = ww / wh;
+    var w, h;
+    if (ar > 1) {
+      h = Math.min(wh * 0.90, wh - 40);
+      w = h * ar * 0.75;
+      if (w > ww * 0.96) { w = ww * 0.96; h = w / (ar * 0.75); }
+    } else {
+      w = Math.min(ww * 0.98, ww - 8);
+      h = w / ar * 0.9;
+      if (h > wh * 0.92) { h = wh * 0.92; w = h * ar * 0.9; }
     }
-    // For lazy-loaded built-in PDFs
-    if (totalPdfPages > 0) {
-        loadAndRenderPage(currentPageIdx);
-    }
-}
+    viewer.style.width = Math.round(w) + 'px';
+    viewer.style.height = Math.round(h) + 'px';
 
-function flipPrev() {
-    if (currentPageIdx > 0) {
-        currentPageIdx--;
-        if (flipPages.length > 0) renderPage();
-        else loadAndRenderPage(currentPageIdx);
-    }
-}
-function flipNext() {
-    const maxPages = flipPages.length > 0 ? flipPages.length : totalPdfPages;
-    if (currentPageIdx < maxPages - 1) {
-        currentPageIdx++;
-        if (flipPages.length > 0) renderPage();
-        else loadAndRenderPage(currentPageIdx);
-    }
-}
-
-// Keyboard navigation
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'ArrowLeft') flipPrev();
-    if (e.key === 'ArrowRight') flipNext();
-});
-
-// ===== LOAD BUILT-IN PDF (lazy, one page at a time) =====
-let totalPdfPages = 0;
-let pageCache = {};
-
-async function loadPdf(key) {
-    currentPdfKey = key;
-    currentPageIdx = 0;
-    flipPages = [];
-    pageCache = {};
-    totalPdfPages = 0;
-    document.getElementById('loading-overlay').style.display = 'flex';
-    document.getElementById('loading-overlay').querySelector('p').textContent = 'Loading...';
-    document.querySelectorAll('.pdf-switch-btns button').forEach(b => {
-        b.classList.toggle('active', b.dataset.key === key);
+    var validPages = pages.map(function(p) {
+      if (!p || !p.src) return {src:'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PC9zdmc+', thumb:''};
+      return p;
     });
-    try {
-        const resp = await fetch('/api/pdf/' + key + '/pages');
-        const data = await resp.json();
-        totalPdfPages = data.total_pages || 0;
-        if (totalPdfPages === 0) {
-            document.getElementById('loading-overlay').querySelector('p').textContent = 'No pages found';
-            return;
-        }
-        // First page comes with the response - render immediately
-        if (data.first_page) {
-            pageCache[0] = data.first_page;
-            renderPageFromB64(data.first_page);
-        } else {
-            await loadAndRenderPage(0);
-        }
-        // Preload page 1
-        if (totalPdfPages > 1 && !pageCache[1]) {
-            fetch('/api/pdf/' + key + '/page/1').then(r=>r.json()).then(d=>{ pageCache[1]=d.image; });
-        }
-    } catch(e) {
-        console.error('Failed to load PDF:', e);
-        document.getElementById('loading-overlay').querySelector('p').textContent = 'Failed: ' + e.message;
-    }
+
+    fb = new FlipBook(viewer, {
+      pages: validPages,
+      viewMode: 'webgl',
+      autoSize: true,
+      flipDuration: 800,
+      backgroundColor: '#fff',
+      sound: true,
+      assets: {flipMp3:'/static/turnPage2.mp3', hardFlipMp3:'/static/turnPage2.mp3'},
+      controlsProps: {
+        enableFullscreen: true, enableToc: true, enableDownload: false,
+        enablePrint: false, enableZoom: true, enableShare: false,
+        enableSearch: true, enableAutoPlay: true, enableSound: true,
+        layout: 10, skin: 'light', autoNavigationTime: 3600,
+        hideControls: false, paddingTop: 10, paddingLeft: 10,
+        paddingRight: 10, paddingBottom: 10, pageTextureSize: 1024,
+        thumbnails: true, autoHideControls: false, controlsTimeout: 8000
+      }
+    });
+    window.addEventListener('resize', function(){ if(fb) fb.resize(); });
+    hideLoading();
+  } catch(e) {
+    console.error('FlipBook error:', e);
+    hideLoading();
+  }
 }
 
-async function loadAndRenderPage(idx) {
-    if (idx < 0 || idx >= totalPdfPages) return;
-    currentPageIdx = idx;
-    if (pageCache[idx]) {
-        renderPageFromB64(pageCache[idx]);
-        return;
+// ===== Load built-in PDF =====
+async function loadPdf(key) {
+  currentPdfKey = key;
+  showLoading('Loading PDF...');
+  try {
+    var resp = await fetch('/api/pdf/' + key + '/pages');
+    var data = await resp.json();
+    var total = data.total_pages || 0;
+    if (total === 0) { updateLoading('No pages found'); return; }
+
+    // Load all pages as FlipBook needs them all
+    var pages = [];
+    for (var i = 0; i < total; i++) {
+      updateLoading('Loading page ' + (i+1) + '/' + total, Math.round((i/total)*100));
+      if (i === 0 && data.first_page) {
+        pages.push({src: 'data:image/jpeg;base64,' + data.first_page, thumb: ''});
+      } else {
+        var pr = await fetch('/api/pdf/' + key + '/page/' + i);
+        var pd = await pr.json();
+        pages.push({src: 'data:image/jpeg;base64,' + pd.image, thumb: ''});
+      }
     }
-    document.getElementById('loading-overlay').style.display = 'flex';
-    document.getElementById('loading-overlay').querySelector('p').textContent = 'Loading page ' + (idx+1) + '/' + totalPdfPages + '...';
-    try {
-        const resp = await fetch('/api/pdf/' + currentPdfKey + '/page/' + idx);
-        const data = await resp.json();
-        pageCache[idx] = data.image;
-        renderPageFromB64(data.image);
-        // Preload next page
-        if (idx + 1 < totalPdfPages && !pageCache[idx+1]) {
-            fetch('/api/pdf/' + currentPdfKey + '/page/' + (idx+1))
-                .then(r => r.json()).then(d => { pageCache[idx+1] = d.image; });
-        }
-    } catch(e) {
-        console.error('Failed to load page:', e);
-        document.getElementById('loading-overlay').querySelector('p').textContent = 'Failed to load page';
-    }
+    createFlipBook(pages);
+  } catch(e) {
+    console.error('loadPdf error:', e);
+    updateLoading('Error: ' + e.message);
+  }
 }
 
-function renderPageFromB64(b64) {
-    const overlay = document.getElementById('loading-overlay');
-    overlay.style.display = 'none';
-    if (!b64) return;
-    // Use simple img tag instead of canvas for reliability
-    const viewer = document.getElementById('viewer');
-    let imgEl = document.getElementById('page-img');
-    if (!imgEl) {
-        imgEl = document.createElement('img');
-        imgEl.id = 'page-img';
-        imgEl.style.cssText = 'max-width:90%;max-height:85%;object-fit:contain;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.6);';
-        // Insert before controls
-        const canvas = document.getElementById('flipbook-canvas');
-        if (canvas) canvas.style.display = 'none';
-        viewer.insertBefore(imgEl, viewer.querySelector('.viewer-controls'));
-    }
-    imgEl.src = 'data:image/jpeg;base64,' + b64;
-    const maxPages = flipPages.length > 0 ? flipPages.length : totalPdfPages;
-    document.getElementById('page-indicator').textContent =
-        'Page ' + (currentPageIdx + 1) + ' / ' + maxPages;
-}
-
-// ===== INIT PDF SWITCH BUTTONS =====
-async function initPdfButtons() {
-    try {
-        const resp = await fetch('/api/pdf/list');
-        const pdfs = await resp.json();
-        const container = document.getElementById('pdf-switch-btns');
-        container.innerHTML = '';
-        pdfs.forEach(p => {
-            const btn = document.createElement('button');
-            btn.textContent = p.label;
-            btn.dataset.key = p.key;
-            btn.onclick = () => loadPdf(p.key);
-            if (p.key === currentPdfKey) btn.classList.add('active');
-            container.appendChild(btn);
-        });
-    } catch(e) {
-        console.error('Failed to load PDF list:', e);
-    }
-}
-
-// ===== STORY GENERATION =====
-async function startGeneration() {
-    const btn = document.getElementById('btn-generate');
-    btn.disabled = true;
-    btn.textContent = 'Generating...';
-
-    const params = {
-        purpose: document.getElementById('inp-purpose').value,
-        style: document.getElementById('inp-style').value,
-        mood: document.getElementById('inp-mood').value,
-        child_name: document.getElementById('inp-child-name').value,
-        child_age: parseInt(document.getElementById('inp-child-age').value) || 7,
-        child_traits: document.getElementById('inp-child-traits').value,
-    };
-
-    try {
-        const resp = await fetch('/api/story/create', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(params),
-        });
-        const data = await resp.json();
-        currentStoryId = data.story_id;
-
-        const box = document.getElementById('progress-box');
-        box.classList.add('visible');
-        document.getElementById('progress-status').textContent = 'Story queued: ' + data.story_id;
-        document.getElementById('progress-bar').style.width = '5%';
-
-        // Start polling
-        if (pollingTimer) clearInterval(pollingTimer);
-        pollingTimer = setInterval(() => pollStatus(data.story_id), 3000);
-    } catch(e) {
-        console.error('Story creation failed:', e);
-        btn.disabled = false;
-        btn.textContent = '\u26A1 Generate Fairy Tale';
-    }
-}
-
-async function pollStatus(storyId) {
-    try {
-        const resp = await fetch('/api/story/status/' + storyId);
-        const data = await resp.json();
-        const status = data.status;
-        const pct = data.progress.percent || 0;
-
-        document.getElementById('progress-status').textContent = status;
-        document.getElementById('progress-bar').style.width = Math.max(pct, 5) + '%';
-        document.getElementById('progress-detail').textContent =
-            data.title ? ('"' + data.title + '" - ' + data.progress.done_pages + '/' + data.progress.total_pages + ' pages') : '';
-
-        if (status.startsWith('complete') || status.startsWith('error')) {
-            clearInterval(pollingTimer);
-            pollingTimer = null;
-            document.getElementById('btn-generate').disabled = false;
-            document.getElementById('btn-generate').textContent = '\u26A1 Generate Fairy Tale';
-
-            if (status.startsWith('complete')) {
-                document.getElementById('progress-bar').style.width = '100%';
-                document.getElementById('progress-status').textContent = 'Complete! Loading into FlipBook...';
-                // Load into FlipBook
-                loadStoryFlipbook(storyId);
-            }
-        }
-    } catch(e) {
-        console.error('Poll failed:', e);
-    }
-}
-
+// ===== Load story into FlipBook =====
 async function loadStoryFlipbook(storyId) {
-    currentPageIdx = 0;
-    flipPages = [];
-    totalPdfPages = 0;
-    pageCache = {};
-    document.getElementById('loading-overlay').style.display = 'flex';
-    document.getElementById('loading-overlay').querySelector('p').textContent = 'Loading Fairy Tale...';
-    try {
-        const resp = await fetch('/api/story/' + storyId + '/flipbook');
-        const data = await resp.json();
-        flipPages = data.pages || [];
-        currentPageIdx = 0;
-        renderPage();
-        // Close story panel
-        document.getElementById('story-panel').classList.remove('open');
-    } catch(e) {
-        console.error('Failed to load story flipbook:', e);
-        document.getElementById('loading-overlay').querySelector('p').textContent = 'Failed to load story';
-    }
+  showLoading('Loading story...');
+  try {
+    var resp = await fetch('/api/story/' + storyId + '/flipbook');
+    var data = await resp.json();
+    var pages = (data.pages || []).map(function(b64) {
+      return {src: 'data:image/jpeg;base64,' + b64, thumb: ''};
+    });
+    if (pages.length > 0) createFlipBook(pages);
+    else updateLoading('No pages');
+  } catch(e) {
+    updateLoading('Error: ' + e.message);
+  }
 }
 
-// ===== GALLERY =====
+// ===== PDF Switch =====
+function togglePdfSwitch() {
+  var popup = document.getElementById('pdfSwitchPopup');
+  if (popup.style.display === 'block') { popup.style.display = 'none'; return; }
+  fetch('/api/pdf/list').then(function(r){return r.json()}).then(function(pdfs) {
+    popup.innerHTML = '';
+    pdfs.forEach(function(p) {
+      var b = document.createElement('button');
+      b.textContent = p.label;
+      if (p.key === currentPdfKey) b.className = 'active';
+      b.onclick = function() { popup.style.display='none'; loadPdf(p.key); };
+      popup.appendChild(b);
+    });
+    popup.style.display = 'block';
+  });
+}
+
+// ===== Story Panel =====
+function toggleStoryPanel() {
+  document.getElementById('storyPanel').classList.toggle('open');
+}
+
+// ===== Generation =====
+var pollingTimer = null;
+async function startGeneration() {
+  var body = {
+    purpose: document.getElementById('inp-purpose').value || 'A story about courage',
+    style: document.getElementById('inp-style').value,
+    mood: document.getElementById('inp-mood').value,
+    child_name: document.getElementById('inp-name').value || 'Haneul',
+    child_age: parseInt(document.getElementById('inp-age').value) || 6,
+    child_traits: document.getElementById('inp-traits').value || 'curious and brave'
+  };
+  document.getElementById('progressArea').style.display = 'block';
+  document.getElementById('progressText').textContent = 'Starting...';
+  document.getElementById('progressBar').style.width = '0%';
+  try {
+    var resp = await fetch('/api/story/create', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    var data = await resp.json();
+    if (data.story_id) pollStatus(data.story_id);
+  } catch(e) {
+    document.getElementById('progressText').textContent = 'Error: ' + e.message;
+  }
+}
+
+function pollStatus(storyId) {
+  if (pollingTimer) clearInterval(pollingTimer);
+  pollingTimer = setInterval(async function() {
+    try {
+      var resp = await fetch('/api/story/status/' + storyId);
+      var d = await resp.json();
+      var pct = d.progress || 0;
+      document.getElementById('progressBar').style.width = pct + '%';
+      document.getElementById('progressText').textContent = (d.step || d.status || 'Working') + ' ' + pct + '%';
+      if (d.status === 'completed' || d.status === 'done') {
+        clearInterval(pollingTimer); pollingTimer = null;
+        document.getElementById('progressText').textContent = 'Done! Opening story...';
+        document.getElementById('progressBar').style.width = '100%';
+        toggleStoryPanel();
+        loadStoryFlipbook(storyId);
+      } else if (d.status === 'error' || d.status === 'failed') {
+        clearInterval(pollingTimer); pollingTimer = null;
+        document.getElementById('progressText').textContent = 'Failed: ' + (d.error || 'unknown');
+      }
+    } catch(e) { /* ignore polling errors */ }
+  }, 3000);
+}
+
+// ===== Gallery =====
+function toggleGallery() {
+  var ov = document.getElementById('galleryOverlay');
+  if (ov.style.display === 'block') { ov.style.display = 'none'; return; }
+  ov.style.display = 'block';
+  loadGallery();
+}
+
 async function loadGallery() {
-    const body = document.getElementById('gallery-body');
-    body.innerHTML = '<p style="color:var(--yellow);font-family:Bangers;font-size:1.2rem;">Loading stories...</p>';
-    try {
-        const resp = await fetch('/api/story/list');
-        const stories = await resp.json();
-        if (stories.length === 0) {
-            body.innerHTML = '<p style="color:rgba(255,255,255,0.5);text-align:center;grid-column:1/-1;padding:40px;">No stories yet. Create your first fairy tale!</p>';
-            return;
-        }
-        body.innerHTML = '';
-        stories.forEach(s => {
-            const card = document.createElement('div');
-            card.className = 'story-card';
-            let statusClass = 'queued';
-            if (s.status.startsWith('complete')) statusClass = 'complete';
-            else if (s.status.startsWith('error')) statusClass = 'error';
-            else if (s.status !== 'queued') statusClass = 'generating';
-
-            let thumbHtml = '<div class="placeholder">&#x1F4D6;</div>';
-            if (s.thumbnail) {
-                thumbHtml = '<img src="' + s.thumbnail + '" alt="thumb" onerror="this.style.display=&quot;none&quot;" />';
-            }
-
-            card.innerHTML = '<div class="card-thumb">' + thumbHtml + '</div>' +
-                '<div class="card-body">' +
-                '<div class="card-title">' + (s.title || 'Untitled') + '</div>' +
-                '<div class="card-meta">' + s.style + ' \u00B7 ' + s.mood + ' \u00B7 ' + (s.child_name || '') + ' (' + (s.child_age || '?') + ')</div>' +
-                '<span class="card-status ' + statusClass + '">' + s.status + '</span>' +
-                '<div class="card-actions">' +
-                '<button class="btn-view" onclick="event.stopPropagation();loadStoryFlipbook(&quot;' + s.id + '&quot;);toggleGallery();">View</button>' +
-                (s.has_pdf ? '<button class="btn-download" onclick="event.stopPropagation();window.open(&quot;/api/story/' + s.id + '/pdf&quot;,&quot;_blank&quot;);">PDF</button>' : '') +
-                '</div></div>';
-            body.appendChild(card);
-        });
-    } catch(e) {
-        console.error('Failed to load gallery:', e);
-        body.innerHTML = '<p style="color:var(--red);">Failed to load stories.</p>';
+  var grid = document.getElementById('galleryGrid');
+  grid.innerHTML = '<p style="color:#FACC15;text-align:center;grid-column:1/-1;font-family:Bangers;font-size:1.2rem;">Loading...</p>';
+  try {
+    var resp = await fetch('/api/story/list');
+    var stories = await resp.json();
+    if (stories.length === 0) {
+      grid.innerHTML = '<p style="color:rgba(255,255,255,0.5);text-align:center;grid-column:1/-1;padding:40px;">No stories yet. Create your first fairy tale!</p>';
+      return;
     }
-}
-
-// ===== CHAT =====
-async function sendChat() {
-    const input = document.getElementById('chat-input');
-    const question = input.value.trim();
-    if (!question) return;
-    input.value = '';
-
-    const msgs = document.getElementById('chat-messages');
-    const userMsg = document.createElement('div');
-    userMsg.className = 'chat-msg user';
-    userMsg.textContent = question;
-    msgs.appendChild(userMsg);
-    msgs.scrollTop = msgs.scrollHeight;
-
-    // Show typing indicator
-    const typing = document.createElement('div');
-    typing.className = 'chat-msg assistant';
-    typing.textContent = 'Thinking...';
-    typing.id = 'typing-indicator';
-    msgs.appendChild(typing);
-    msgs.scrollTop = msgs.scrollHeight;
-
-    try {
-        const resp = await fetch('/api/chat', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                pdf_key: currentPdfKey,
-                question: question,
-                page_idx: currentPageIdx,
-            }),
-        });
-        const data = await resp.json();
-        typing.textContent = data.answer || 'No response.';
-        typing.id = '';
-    } catch(e) {
-        typing.textContent = 'Error: ' + e.message;
-        typing.id = '';
-    }
-    msgs.scrollTop = msgs.scrollHeight;
+    grid.innerHTML = '';
+    stories.forEach(function(s) {
+      var card = document.createElement('div');
+      card.className = 'story-card';
+      card.onclick = function() { toggleGallery(); loadStoryFlipbook(s.id); };
+      var thumbSrc = s.thumbnail || '';
+      card.innerHTML = (thumbSrc ? '<img src="'+thumbSrc+'" alt="cover"/>' : '<div style="height:150px;background:#FEF9C3;display:flex;align-items:center;justify-content:center;font-size:3rem;">&#x1F4D6;</div>') +
+        '<div class="card-info"><div class="card-title">' + (s.title||'Untitled') + '</div><div class="card-meta">' + (s.style||'') + '</div></div>';
+      grid.appendChild(card);
+    });
+  } catch(e) {
+    grid.innerHTML = '<p style="color:#EF4444;text-align:center;grid-column:1/-1;">Failed to load</p>';
+  }
 }
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', function() {
-    console.log('[INIT] DOMContentLoaded fired');
-    initPdfButtons();
-    loadPdf('prompt').catch(function(e) {
-        console.error('[INIT] loadPdf failed:', e);
-        var overlay = document.getElementById('loading-overlay');
-        if (overlay) overlay.querySelector('p').textContent = 'Error: ' + e.message;
-    });
+  loadPdf('prompt');
 });
-
-window.onerror = function(msg, url, line) {
-    console.error('[GLOBAL ERROR]', msg, 'at line', line);
-    var overlay = document.getElementById('loading-overlay');
-    if (overlay) overlay.querySelector('p').textContent = 'JS Error: ' + msg;
-};
 </script>
 </body>
 </html>"""
-
 # Serve main HTML
 @app.get("/", response_class=HTMLResponse)
 async def index():
