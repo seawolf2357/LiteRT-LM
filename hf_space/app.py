@@ -2247,9 +2247,9 @@ async function loadGallery() {
             else if (s.status.startsWith('error')) statusClass = 'error';
             else if (s.status !== 'queued') statusClass = 'generating';
 
-            let thumbHtml = '<div class="placeholder">\uD83D\uDCD6</div>';
+            let thumbHtml = '<div class="placeholder">&#x1F4D6;</div>';
             if (s.thumbnail) {
-                thumbHtml = '<img src="' + s.thumbnail + '" alt="thumb" onerror="this.parentElement.innerHTML=\'<div class=placeholder>\uD83D\uDCD6</div>\'" />';
+                thumbHtml = '<img src="' + s.thumbnail + '" alt="thumb" onerror="this.parentElement.innerHTML=\'<div class=placeholder>&#x1F4D6;</div>\'" />';
             }
 
             card.innerHTML = '<div class="card-thumb">' + thumbHtml + '</div>' +
