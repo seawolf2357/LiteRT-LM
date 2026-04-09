@@ -309,6 +309,35 @@ export function computeAudioBars(data, numBars) {
 /**
  * Generate a unique message ID.
  */
+/**
+ * Perform a web search using Brave Search API.
+ * Returns formatted text with top results.
+ */
+export async function braveSearch(query, apiKey) {
+  const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
+  const res = await fetch(url, {
+    headers: {
+      "X-Subscription-Token": apiKey,
+      Accept: "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Brave Search API error ${res.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const results = data.web?.results || [];
+
+  if (results.length === 0) return "No search results found.";
+
+  return results
+    .slice(0, 5)
+    .map((r, i) => `${i + 1}. **${r.title}**\n   ${r.description}\n   URL: ${r.url}`)
+    .join("\n\n");
+}
+
 export function generateId() {
   return crypto.randomUUID?.() ?? `msg-${Date.now()}-${Math.random()}`;
 }

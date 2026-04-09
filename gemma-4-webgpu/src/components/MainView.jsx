@@ -1,8 +1,10 @@
 import { useState, useRef, useCallback } from "react";
-import { Video, FolderOpen, MessageSquare, Shield } from "lucide-react";
+import { Video, FolderOpen, MessageSquare, Shield, ScanSearch, Settings } from "lucide-react";
 import { useMedia } from "../contexts/MediaContext";
 import ScanningOverlay from "./ScanningOverlay";
 import ChatOverlay from "./ChatOverlay";
+import DetectionPanel from "./DetectionPanel";
+import SettingsPanel from "./SettingsPanel";
 
 export default function MainView() {
   const { videoRef, canvasRef, videoSource, startWebcam, loadVideoFile, setBlankMode } = useMedia();
@@ -11,6 +13,8 @@ export default function MainView() {
   const [scanFrame, setScanFrame] = useState(null);
   const [scanCompleteFrame, setScanCompleteFrame] = useState(null);
   const [cameraError, setCameraError] = useState(null);
+  const [showDetection, setShowDetection] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleScanStart = useCallback((dataUrl) => {
@@ -29,6 +33,7 @@ export default function MainView() {
   }, []);
 
   const isBlank = videoSource === "blank";
+  const isWebcamOrVideo = videoSource === "webcam" || videoSource === "file";
 
   return (
     <div className="fixed inset-0 animate-fade-in-up">
@@ -45,9 +50,7 @@ export default function MainView() {
       <canvas ref={canvasRef} className="hidden" />
 
       {/* Blank background */}
-      {isBlank && (
-        <div className="absolute inset-0 bg-dm-bg" />
-      )}
+      {isBlank && <div className="absolute inset-0 bg-dm-bg" />}
 
       {/* Hidden file input */}
       <input
@@ -116,17 +119,39 @@ export default function MainView() {
       {/* Header */}
       {videoSource && (
         <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-5 pt-4 pb-10">
-          <h1 className="text-2xl font-bold text-dm-text">
-            VIDRAFT
-          </h1>
-          <div className="flex items-center gap-1.5 rounded-full bg-dm-surface-high px-3 py-1.5">
-            <Shield className="size-4 text-dm-green" />
-            <span className="text-xs font-medium text-dm-text-secondary">Local</span>
+          <h1 className="text-2xl font-bold text-dm-text">VIDRAFT</h1>
+          <div className="flex items-center gap-2">
+            {/* Detection mode button (only when camera/video active) */}
+            {isWebcamOrVideo && (
+              <button
+                type="button"
+                onClick={() => setShowDetection(true)}
+                title="Detection Mode"
+                className="flex items-center gap-1.5 rounded-full bg-dm-surface-high px-3 py-1.5 text-dm-text-secondary transition-colors hover:text-dm-text"
+              >
+                <ScanSearch className="size-4" />
+                <span className="text-xs font-medium">Detect</span>
+              </button>
+            )}
+            {/* Settings button */}
+            <button
+              type="button"
+              onClick={() => setShowSettings(true)}
+              title="Settings"
+              className="flex items-center justify-center rounded-full bg-dm-surface-high p-2 text-dm-text-secondary transition-colors hover:text-dm-text"
+            >
+              <Settings className="size-4" />
+            </button>
+            {/* Local badge */}
+            <div className="flex items-center gap-1.5 rounded-full bg-dm-surface-high px-3 py-1.5">
+              <Shield className="size-4 text-dm-green" />
+              <span className="text-xs font-medium text-dm-text-secondary">Local</span>
+            </div>
           </div>
         </header>
       )}
 
-      {/* Overlays (active when any source is selected) */}
+      {/* Overlays */}
       {videoSource && (
         <>
           {isScanning && scanFrame && (
@@ -142,6 +167,16 @@ export default function MainView() {
             onScanConsumed={handleScanConsumed}
           />
         </>
+      )}
+
+      {/* Detection Panel */}
+      {showDetection && (
+        <DetectionPanel onClose={() => setShowDetection(false)} />
+      )}
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <SettingsPanel onClose={() => setShowSettings(false)} />
       )}
     </div>
   );

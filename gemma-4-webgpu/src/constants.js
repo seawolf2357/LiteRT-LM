@@ -14,7 +14,8 @@ export const SYSTEM_PROMPT =
   "The user may have a live camera, video feed, or a blank canvas. You can use the vision tool to capture and " +
   "analyze the current frame whenever the user asks about what they see, what is on screen, their surroundings, " +
   "or anything visual. You can also use the audio tool to listen to the user's microphone input when they ask " +
-  "you to listen or transcribe. Always be concise and helpful.";
+  "you to listen or transcribe. If a web_search tool is available, use it when the user asks about current events, " +
+  "recent news, real-time information, or anything you are unsure about. Always be concise and helpful.";
 
 export const TOOLS = [
   {
@@ -38,6 +39,26 @@ export const TOOLS = [
     },
   },
 ];
+
+export const SEARCH_TOOL = {
+  type: "function",
+  function: {
+    name: "web_search",
+    description:
+      "Search the web for current information. Use this when the user asks about recent events, news, " +
+      "real-time data, or anything you need up-to-date information for.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The search query to look up on the web.",
+        },
+      },
+      required: ["query"],
+    },
+  },
+};
 
 export const LOADING_TIPS = [
   "Loading model...",

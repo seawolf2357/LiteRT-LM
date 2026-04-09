@@ -12,9 +12,10 @@ const readImage = RawImage.read.bind(RawImage);
 import {
   MODEL_ID,
   TOOLS,
+  SEARCH_TOOL,
   SPECIAL_TOKEN_REGEX,
 } from "../constants";
-import { parseToolCalls, buildChatMessages, decodeImage } from "../utils";
+import { parseToolCalls, buildChatMessages, decodeImage, braveSearch } from "../utils";
 
 const ModelContext = createContext(null);
 
@@ -31,6 +32,22 @@ export function ModelProvider({ children }) {
   const processorRef = useRef(null);
   const loadPromiseRef = useRef(null);
   const stoppingCriteria = useRef(new InterruptableStoppingCriteria());
+
+  // Brave Search API key (stored in localStorage)
+  const [braveApiKey, setBraveApiKey] = useState(
+    () => localStorage.getItem("vidraft_brave_api_key") || "",
+  );
+
+  const updateBraveApiKey = useCallback((key) => {
+    setBraveApiKey(key);
+    if (key) localStorage.setItem("vidraft_brave_api_key", key);
+    else localStorage.removeItem("vidraft_brave_api_key");
+  }, []);
+
+  /** Get active tools based on available API keys */
+  const getActiveTools = useCallback(() => {
+    return braveApiKey ? [...TOOLS, SEARCH_TOOL] : TOOLS;
+  }, [braveApiKey]);
 
   const loadModel = useCallback(async () => {
     if (loadState === "ready") return;
@@ -76,17 +93,18 @@ export function ModelProvider({ children }) {
 
   /**
    * Run a single generation pass with streaming support.
-   * Handles thinking mode (channel tokens) and content streaming.
    */
   const runGeneration = useCallback(async (messages, onToken, options) => {
     const processor = processorRef.current;
     const model = modelRef.current;
     if (!processor || !model) throw new Error("Model not loaded");
 
+    const activeTools = options.tools ? (options.customTools || TOOLS) : undefined;
+
     const inputs = await processor(
       processor.apply_chat_template(messages, {
         add_generation_prompt: true,
-        ...(options.tools && { tools: TOOLS }),
+        ...(activeTools && { tools: activeTools }),
         ...(options.enableThinking && { enable_thinking: true }),
       }),
       options.image ? await readImage(options.image) : null,
@@ -96,7 +114,7 @@ export function ModelProvider({ children }) {
 
     let fullText = "";
     let buffer = "";
-    let phase = "init"; // "init" | "thinking" | "content"
+    let phase = "init";
 
     const streamer = new TextStreamer(processor.tokenizer, {
       skip_prompt: true,
@@ -143,7 +161,6 @@ export function ModelProvider({ children }) {
           return;
         }
 
-        // phase === "content"
         const cleaned = token.replace(SPECIAL_TOKEN_REGEX, "");
         if (cleaned) {
           fullText += cleaned;
@@ -157,13 +174,12 @@ export function ModelProvider({ children }) {
 
     const output = await model.generate({
       ...inputs,
-      max_new_tokens: 2048,
+      max_new_tokens: options.maxNewTokens || 2048,
       do_sample: false,
       streamer,
       stopping_criteria: [stoppingCriteria.current],
     });
 
-    // Flush remaining buffer
     if (buffer) {
       const cleaned = buffer.replace(SPECIAL_TOKEN_REGEX, "");
       if (cleaned) {
@@ -181,7 +197,7 @@ export function ModelProvider({ children }) {
   }, []);
 
   /**
-   * Transcribe audio using the model's speech recognition capability.
+   * Transcribe audio.
    */
   const transcribeAudio = useCallback(async (audioData) => {
     const processor = processorRef.current;
@@ -191,10 +207,7 @@ export function ModelProvider({ children }) {
     const inputs = await processor(
       processor.apply_chat_template(
         [
-          {
-            role: "system",
-            content: "Transcribe the following speech segment in English into English text.",
-          },
+          { role: "system", content: "Transcribe the following speech segment in English into English text." },
           { role: "user", content: [{ type: "audio" }] },
         ],
         { add_generation_prompt: true },
@@ -205,7 +218,6 @@ export function ModelProvider({ children }) {
     );
 
     stoppingCriteria.current.reset();
-
     const output = await model.generate({
       ...inputs,
       max_new_tokens: 512,
@@ -214,29 +226,19 @@ export function ModelProvider({ children }) {
     });
 
     return processor
-      .batch_decode(output.slice(null, [inputs.input_ids.dims.at(-1), null]), {
-        skip_special_tokens: true,
-      })[0]
+      .batch_decode(output.slice(null, [inputs.input_ids.dims.at(-1), null]), { skip_special_tokens: true })[0]
       .trim();
   }, []);
 
   /**
-   * Handle a direct image message (user sent a frame with text).
+   * Handle a direct image message.
    */
   const generateWithImage = useCallback(
     async (messages, lastMessage, onToken, enableThinking) => {
       const canvas = await decodeImage(lastMessage.image);
       if (!canvas) throw new Error("Failed to decode captured frame");
       return runGeneration(
-        [
-          {
-            role: "user",
-            content: [
-              { type: "image" },
-              { type: "text", text: lastMessage.content },
-            ],
-          },
-        ],
+        [{ role: "user", content: [{ type: "image" }, { type: "text", text: lastMessage.content }] }],
         onToken,
         { enableThinking, image: canvas },
       );
@@ -245,7 +247,63 @@ export function ModelProvider({ children }) {
   );
 
   /**
-   * High-level generate function that handles text, image, audio, and tool calling.
+   * Analyze a single frame for detection mode (non-streaming, short response).
+   * Returns { detected: boolean, description: string }
+   */
+  const analyzeFrame = useCallback(async (imageDataUrl, condition) => {
+    const processor = processorRef.current;
+    const model = modelRef.current;
+    if (!processor || !model) throw new Error("Model not loaded");
+
+    const canvas = await decodeImage(imageDataUrl);
+    if (!canvas) return { detected: false, description: "Failed to decode frame" };
+
+    const prompt =
+      `Analyze this image for the following condition: "${condition}"\n` +
+      `Respond with ONLY a JSON object: {"detected": true or false, "description": "brief explanation"}\n` +
+      `Do not include any other text.`;
+
+    const inputs = await processor(
+      processor.apply_chat_template(
+        [{ role: "user", content: [{ type: "image" }, { type: "text", text: prompt }] }],
+        { add_generation_prompt: true },
+      ),
+      await readImage(canvas),
+      null,
+      { add_special_tokens: false },
+    );
+
+    stoppingCriteria.current.reset();
+    const output = await model.generate({
+      ...inputs,
+      max_new_tokens: 256,
+      do_sample: false,
+      stopping_criteria: [stoppingCriteria.current],
+    });
+
+    const rawText = processor
+      .batch_decode(output.slice(null, [inputs.input_ids.dims.at(-1), null]), { skip_special_tokens: true })[0]
+      .trim();
+
+    try {
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          detected: !!parsed.detected,
+          description: parsed.description || rawText,
+        };
+      }
+    } catch {}
+
+    // Fallback: heuristic detection from text
+    const lower = rawText.toLowerCase();
+    const detected = lower.includes('"detected": true') || lower.includes('"detected":true');
+    return { detected, description: rawText };
+  }, []);
+
+  /**
+   * High-level generate function that handles text, image, audio, tool calling, and search.
    */
   const generate = useCallback(
     async (messages, onToken, options) => {
@@ -264,7 +322,7 @@ export function ModelProvider({ children }) {
         return text;
       }
 
-      // Audio message: transcribe first, then generate
+      // Audio message
       if (lastMessage?.audio) {
         const transcription = await transcribeAudio(lastMessage.audio);
         onTranscription?.(transcription);
@@ -276,10 +334,12 @@ export function ModelProvider({ children }) {
       }
 
       // Text message with tool calling
+      const activeTools = getActiveTools();
       const chatMessages = buildChatMessages(messages);
       const { text, rawOutput } = await runGeneration(chatMessages, onToken, {
         enableThinking,
         tools: true,
+        customTools: activeTools,
       });
 
       const toolCalls = parseToolCalls(rawOutput);
@@ -287,38 +347,48 @@ export function ModelProvider({ children }) {
 
       // Handle tool calls
       onToolCall?.();
-      const visionCall = toolCalls.find((c) => c.function.name === "vision");
-      let toolResponse = "Could not capture frame.";
+      const toolResponseMap = {};
 
-      if (visionCall && captureFrame) {
-        const frameDataUrl = captureFrame();
-        if (frameDataUrl) {
-          const canvas = await decodeImage(frameDataUrl);
-          if (canvas) {
-            const { text: visionText } = await runGeneration(
-              [
-                {
-                  role: "user",
-                  content: [
-                    { type: "image" },
-                    {
-                      type: "text",
-                      text: visionCall.function.arguments.prompt || "Describe what you see",
-                    },
-                  ],
-                },
-              ],
-              onToken,
-              { enableThinking: false, image: canvas },
-            );
-            toolResponse = visionText;
+      // Handle vision tool
+      const visionCall = toolCalls.find((c) => c.function.name === "vision");
+      if (visionCall) {
+        let response = "Could not capture frame.";
+        if (captureFrame) {
+          const frameDataUrl = captureFrame();
+          if (frameDataUrl) {
+            const canvas = await decodeImage(frameDataUrl);
+            if (canvas) {
+              const { text: visionText } = await runGeneration(
+                [{ role: "user", content: [{ type: "image" }, { type: "text", text: visionCall.function.arguments.prompt || "Describe what you see" }] }],
+                onToken,
+                { enableThinking: false, image: canvas },
+              );
+              response = visionText;
+            }
           }
+        }
+        toolResponseMap.vision = response;
+      }
+
+      // Handle search tool
+      const searchCall = toolCalls.find((c) => c.function.name === "web_search");
+      if (searchCall && braveApiKey) {
+        const query = searchCall.function.arguments.query || "";
+        if (query) {
+          try {
+            const searchResults = await braveSearch(query, braveApiKey);
+            toolResponseMap.web_search = searchResults;
+          } catch (err) {
+            toolResponseMap.web_search = `Search failed: ${err.message}`;
+          }
+        } else {
+          toolResponseMap.web_search = "No search query provided.";
         }
       }
 
       const toolResponses = toolCalls.map((call) => ({
         name: call.function.name,
-        response: { description: toolResponse },
+        response: { description: toolResponseMap[call.function.name] || "Tool not available." },
       }));
 
       const { text: finalText } = await runGeneration(
@@ -328,12 +398,12 @@ export function ModelProvider({ children }) {
           { role: "user", tool_responses: toolResponses },
         ],
         onToken,
-        { enableThinking, tools: true },
+        { enableThinking, tools: true, customTools: activeTools },
       );
 
       return finalText;
     },
-    [runGeneration, transcribeAudio, generateWithImage],
+    [runGeneration, transcribeAudio, generateWithImage, getActiveTools, braveApiKey],
   );
 
   const stopGeneration = useCallback(() => {
@@ -342,7 +412,16 @@ export function ModelProvider({ children }) {
 
   return (
     <ModelContext.Provider
-      value={{ loadState, loadProgress, loadModel, generate, stopGeneration }}
+      value={{
+        loadState,
+        loadProgress,
+        loadModel,
+        generate,
+        analyzeFrame,
+        stopGeneration,
+        braveApiKey,
+        updateBraveApiKey,
+      }}
     >
       {children}
     </ModelContext.Provider>
