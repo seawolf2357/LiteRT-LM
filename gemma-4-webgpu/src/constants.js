@@ -1,4 +1,4 @@
-export const MODEL_ID = "onnx-community/gemma-4-E2B-it-ONNX";
+export const MODEL_ID = "FINAL-Bench/Darwin-2B-webgpu";
 
 export const SCAN_TIMEOUT = 2000;
 
