@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Video, FolderOpen, MessageSquare, WifiOff } from "lucide-react";
+import { Video, FolderOpen, MessageSquare, Shield } from "lucide-react";
 import { useMedia } from "../contexts/MediaContext";
 import ScanningOverlay from "./ScanningOverlay";
 import ChatOverlay from "./ChatOverlay";
@@ -119,7 +119,10 @@ export default function MainView() {
           <h1 className="text-2xl font-bold text-dm-text">
             VIDRAFT
           </h1>
-          <WifiOff className="size-10 text-dm-text-secondary" />
+          <div className="flex items-center gap-1.5 rounded-full bg-dm-surface-high px-3 py-1.5">
+            <Shield className="size-4 text-dm-green" />
+            <span className="text-xs font-medium text-dm-text-secondary">Local</span>
+          </div>
         </header>
       )}
 

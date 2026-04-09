@@ -124,6 +124,171 @@ export function preprocessMath(text) {
   );
 }
 
+/** Max characters to extract from uploaded files (model context limit) */
+const MAX_FILE_CHARS = 8000;
+
+/** Supported text file extensions */
+const TEXT_EXTENSIONS = new Set([
+  "txt", "csv", "json", "md", "xml", "html", "css", "js", "jsx", "ts", "tsx",
+  "py", "java", "c", "cpp", "h", "rs", "go", "yaml", "yml", "toml", "ini",
+  "log", "sql", "sh", "bat", "env", "conf", "cfg",
+]);
+
+/** Check if a file is a text-readable type */
+function isTextFile(file) {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return TEXT_EXTENSIONS.has(ext) || file.type.startsWith("text/");
+}
+
+/** Check if a file is an image */
+function isImageFile(file) {
+  return file.type.startsWith("image/");
+}
+
+/** Check if a file is a PDF */
+function isPdfFile(file) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+/**
+ * Read a text file and return its content (truncated to MAX_FILE_CHARS).
+ */
+function readTextFile(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      let text = reader.result ?? "";
+      if (text.length > MAX_FILE_CHARS) {
+        text = text.slice(0, MAX_FILE_CHARS) + "\n\n... (truncated)";
+      }
+      resolve(text);
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsText(file);
+  });
+}
+
+/**
+ * Read an image file and return a data URL.
+ */
+function readImageFile(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Extract text from a PDF using pdf.js (loaded from CDN).
+ * Falls back gracefully if pdf.js is not available.
+ */
+async function readPdfFile(file) {
+  try {
+    // Dynamically load pdf.js from CDN
+    if (!window.pdfjsLib) {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs";
+      script.type = "module";
+
+      // Use a simpler approach: fetch and eval the UMD build
+      const res = await fetch(
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs",
+      );
+      if (!res.ok) throw new Error("Failed to load pdf.js");
+      const code = await res.text();
+      const blob = new Blob([code], { type: "application/javascript" });
+      const url = URL.createObjectURL(blob);
+      const module = await import(/* @vite-ignore */ url);
+      URL.revokeObjectURL(url);
+      window.pdfjsLib = module;
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pages = [];
+    const maxPages = Math.min(pdf.numPages, 20);
+
+    for (let i = 1; i <= maxPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const text = content.items.map((item) => item.str).join(" ");
+      pages.push(`[Page ${i}]\n${text}`);
+    }
+
+    let result = pages.join("\n\n");
+    if (result.length > MAX_FILE_CHARS) {
+      result = result.slice(0, MAX_FILE_CHARS) + "\n\n... (truncated)";
+    }
+    if (pdf.numPages > maxPages) {
+      result += `\n\n(Showing ${maxPages} of ${pdf.numPages} pages)`;
+    }
+    return result;
+  } catch (err) {
+    console.error("PDF extraction failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Process an uploaded file and return { text, image, fileName, fileType }.
+ * - Text files → extracted text content
+ * - Images → data URL for vision pipeline
+ * - PDFs → extracted text via pdf.js
+ */
+export async function processUploadedFile(file) {
+  const fileName = file.name;
+
+  if (isImageFile(file)) {
+    const dataUrl = await readImageFile(file);
+    return dataUrl ? { image: dataUrl, fileName, fileType: "image" } : null;
+  }
+
+  if (isPdfFile(file)) {
+    const text = await readPdfFile(file);
+    return text ? { text, fileName, fileType: "pdf" } : null;
+  }
+
+  if (isTextFile(file)) {
+    const text = await readTextFile(file);
+    return text ? { text, fileName, fileType: "text" } : null;
+  }
+
+  // Try reading as text anyway
+  const text = await readTextFile(file);
+  return text ? { text, fileName, fileType: "unknown" } : null;
+}
+
+/**
+ * Export conversation as Markdown text.
+ */
+export function exportAsMarkdown(messages) {
+  return messages
+    .map((m) => {
+      const role = m.role === "user" ? "**You**" : "**VIDRAFT**";
+      let content = m.content || "";
+      if (m.thinking) content = `> *Thinking:* ${m.thinking}\n\n${content}`;
+      if (m.image) content = `[Image attached]\n\n${content}`;
+      if (m.audio) content = `[Audio attached]\n\n${content}`;
+      return `${role}:\n${content}`;
+    })
+    .join("\n\n---\n\n");
+}
+
+/**
+ * Export conversation as JSON.
+ */
+export function exportAsJson(messages) {
+  return JSON.stringify(
+    messages.map(({ id, role, content, thinking }) => ({ id, role, content, thinking })),
+    null,
+    2,
+  );
+}
+
 /**
  * Compute amplitude bars from audio data for visualization.
  */
