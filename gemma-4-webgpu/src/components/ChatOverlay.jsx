@@ -234,7 +234,7 @@ export default function ChatOverlay({
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask Gemma anything..."
+          placeholder="Ask VIDRAFT anything..."
           disabled={isGenerating}
           className="min-w-0 flex-1 bg-transparent px-2 text-sm text-dm-text placeholder-dm-text-secondary/60 outline-none disabled:opacity-50"
         />

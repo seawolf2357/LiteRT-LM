@@ -23,7 +23,7 @@ export function MediaProvider({ children }) {
   const streamRef = useRef(null);
   const objectUrlRef = useRef(null);
 
-  const [videoSource, setVideoSource] = useState(null); // "webcam" | "file" | null
+  const [videoSource, setVideoSource] = useState(null); // "webcam" | "file" | "blank" | null
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
 
@@ -35,6 +35,16 @@ export function MediaProvider({ children }) {
     },
     [],
   );
+
+  const setBlankMode = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setVideoSource("blank");
+  }, []);
 
   const startWebcam = useCallback(async () => {
     // Stop existing tracks
@@ -153,6 +163,7 @@ export function MediaProvider({ children }) {
         videoSource,
         isVideoReady,
         isRecording,
+        setBlankMode,
         startWebcam,
         loadVideoFile,
         captureFrame,

@@ -1,11 +1,11 @@
 import { useState, useRef, useCallback } from "react";
-import { Video, FolderOpen, WifiOff } from "lucide-react";
+import { Video, FolderOpen, MessageSquare, WifiOff } from "lucide-react";
 import { useMedia } from "../contexts/MediaContext";
 import ScanningOverlay from "./ScanningOverlay";
 import ChatOverlay from "./ChatOverlay";
 
 export default function MainView() {
-  const { videoRef, canvasRef, videoSource, startWebcam, loadVideoFile } = useMedia();
+  const { videoRef, canvasRef, videoSource, startWebcam, loadVideoFile, setBlankMode } = useMedia();
 
   const [isScanning, setIsScanning] = useState(false);
   const [scanFrame, setScanFrame] = useState(null);
@@ -28,9 +28,11 @@ export default function MainView() {
     setScanFrame(null);
   }, []);
 
+  const isBlank = videoSource === "blank";
+
   return (
     <div className="fixed inset-0 animate-fade-in-up">
-      {/* Video element */}
+      {/* Video element (hidden in blank mode) */}
       <video
         ref={videoRef}
         autoPlay
@@ -38,9 +40,14 @@ export default function MainView() {
         playsInline
         className={`absolute inset-0 h-full w-full object-cover ${
           videoSource === "webcam" ? "-scale-x-100" : ""
-        }`}
+        } ${isBlank ? "hidden" : ""}`}
       />
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* Blank background */}
+      {isBlank && (
+        <div className="absolute inset-0 bg-dm-bg" />
+      )}
 
       {/* Hidden file input */}
       <input
@@ -58,10 +65,13 @@ export default function MainView() {
         className="hidden"
       />
 
-      {/* Top gradient */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
-      {/* Bottom gradient */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/70 to-transparent" />
+      {/* Top/bottom gradients (only for camera/video modes) */}
+      {!isBlank && videoSource && (
+        <>
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-dm-bg/50 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-dm-bg/70 to-transparent" />
+        </>
+      )}
 
       {/* Source selection (shown when no video source) */}
       {!videoSource && (
@@ -70,6 +80,14 @@ export default function MainView() {
             <p className="text-sm text-dm-text-secondary">{cameraError}</p>
           )}
           <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={() => setBlankMode()}
+              className="frosted flex w-44 flex-col items-center gap-3 rounded-2xl py-6 text-dm-text transition-colors hover:bg-dm-surface-higher"
+            >
+              <MessageSquare className="size-8" />
+              <span className="text-base font-medium">Chat Only</span>
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -96,14 +114,16 @@ export default function MainView() {
       )}
 
       {/* Header */}
-      <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/60 via-black/30 to-transparent px-5 pt-4 pb-10">
-        <h1 className="text-2xl font-bold text-dm-text drop-shadow-lg">
-          Gemma 4
-        </h1>
-        <WifiOff className="size-12 text-white drop-shadow-lg" />
-      </header>
+      {videoSource && (
+        <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-5 pt-4 pb-10">
+          <h1 className="text-2xl font-bold text-dm-text">
+            VIDRAFT
+          </h1>
+          <WifiOff className="size-10 text-dm-text-secondary" />
+        </header>
+      )}
 
-      {/* Overlays (only when video source is active) */}
+      {/* Overlays (active when any source is selected) */}
       {videoSource && (
         <>
           {isScanning && scanFrame && (

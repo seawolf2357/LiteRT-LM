@@ -27,7 +27,7 @@ export default function LoadingPage({ onReady }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-8 px-6 animate-fade-in-up bg-dm-bg">
       <h1 className="text-3xl font-bold tracking-tight text-dm-text">
-        Gemma 4 WebGPU
+        VIDRAFT
       </h1>
 
       <div className="flex w-full max-w-sm flex-col items-center gap-4">

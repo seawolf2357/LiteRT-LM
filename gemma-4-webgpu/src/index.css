@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  --color-dm-bg: #121317;
-  --color-dm-surface-high: #212226;
-  --color-dm-surface-higher: #2f3034;
-  --color-dm-text: #f8f9fc;
-  --color-dm-text-secondary: #b2bbc5;
-  --color-dm-outline: #e6eaf01f;
-  --color-dm-blue: #3c90ff;
+  --color-dm-bg: #ffffff;
+  --color-dm-surface-high: #f0f1f3;
+  --color-dm-surface-higher: #e4e6ea;
+  --color-dm-text: #1a1c20;
+  --color-dm-text-secondary: #5f6875;
+  --color-dm-outline: #1a1c201f;
+  --color-dm-blue: #2b7de9;
   --color-dm-green: #0ebc5f;
-  --color-dm-red: #ff4c45;
+  --color-dm-red: #e8453e;
 
   --animate-fade-in-up: fade-in-up 0.5s ease-out both;
   --animate-scan-line: scan-line 2s ease-in-out infinite;
@@ -105,7 +105,7 @@
   to {
     opacity: 1;
     filter: blur();
-    text-shadow: 0 0 40px #f8f9fc26;
+    text-shadow: 0 0 40px #1a1c2010;
     transform: translateY(0);
   }
 }
@@ -134,12 +134,12 @@
 
 @keyframes glow {
   0% {
-    text-shadow: 0 0 20px #f8f9fc0d;
+    text-shadow: 0 0 20px #1a1c2008;
   }
   to {
     text-shadow:
-      0 0 40px #f8f9fc26,
-      0 0 80px #f8f9fc0d;
+      0 0 40px #1a1c2012,
+      0 0 80px #1a1c2008;
   }
 }
 
@@ -168,8 +168,8 @@ body {
 .frosted {
   -webkit-backdrop-filter: blur(20px) saturate(1.2);
   backdrop-filter: blur(20px) saturate(1.2);
-  background: #12131799;
-  border: 1px solid #e6eaf014;
+  background: #ffffff99;
+  border: 1px solid #1a1c2014;
 }
 
 .chat-scroll::-webkit-scrollbar {
@@ -181,6 +181,6 @@ body {
 }
 
 .chat-scroll::-webkit-scrollbar-thumb {
-  background: #e6eaf026;
+  background: #1a1c2026;
   border-radius: 2px;
 }
