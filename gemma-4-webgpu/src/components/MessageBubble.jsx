@@ -1,12 +1,23 @@
-import Markdown from "streamdown";
-import { katex as katexPlugin } from "streamdown/plugins/katex";
+import { Streamdown } from "streamdown";
+import "streamdown/styles.css";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { preprocessMath } from "../utils";
 import ThinkingToggle from "./ThinkingToggle";
 import AudioWaveform from "./AudioWaveform";
 
-/** KaTeX math plugin configured with single dollar sign support */
-const mathPlugin = katexPlugin({ singleDollarTextMath: true });
+/**
+ * KaTeX math plugin for Streamdown.
+ * Matches the original bundle's t5({ singleDollarTextMath: true }) plugin.
+ */
+const mathPlugin = {
+  name: "katex",
+  type: "math",
+  remarkPlugin: [remarkMath, { singleDollarTextMath: true }],
+  rehypePlugin: [rehypeKatex, { errorColor: "var(--color-muted-foreground)" }],
+  getStyles: () => "katex/dist/katex.min.css",
+};
 
 export default function MessageBubble({ message }) {
   const isUser = message.role === "user";
@@ -44,13 +55,13 @@ export default function MessageBubble({ message }) {
             isUser ? (
               <span className="whitespace-pre-wrap">{message.content}</span>
             ) : (
-              <Markdown
+              <Streamdown
                 plugins={{ math: mathPlugin }}
                 parseIncompleteMarkdown={false}
                 isAnimating={!!message.isStreaming}
               >
                 {preprocessMath(message.content)}
-              </Markdown>
+              </Streamdown>
             )
           ) : message.isStreaming ? (
             <span className="inline-block animate-pulse text-dm-blue">|</span>

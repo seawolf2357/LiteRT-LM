@@ -9,12 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.6.0",
+    "@huggingface/transformers": "^4.0.1",
     "katex": "^0.16.44",
     "lucide-react": "^0.511.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "streamdown": "^0.1.0"
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0",
+    "streamdown": "^2.5.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",

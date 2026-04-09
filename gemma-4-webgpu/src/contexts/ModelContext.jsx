@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useRef, useCallback } from "react";
 import {
   AutoProcessor,
-  Gemma3ForConditionalGeneration,
+  Gemma4ForConditionalGeneration,
   TextStreamer,
   InterruptableStoppingCriteria,
   RawImage,
@@ -42,7 +42,7 @@ export function ModelProvider({ children }) {
       try {
         const [processor, model] = await Promise.all([
           AutoProcessor.from_pretrained(MODEL_ID),
-          Gemma3ForConditionalGeneration.from_pretrained(MODEL_ID, {
+          Gemma4ForConditionalGeneration.from_pretrained(MODEL_ID, {
             dtype: {
               audio_encoder: "fp16",
               vision_encoder: "fp16",
