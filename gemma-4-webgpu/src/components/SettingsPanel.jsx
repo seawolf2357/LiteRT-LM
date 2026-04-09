@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { X, Search, CheckCircle2, XCircle } from "lucide-react";
+import { X, Search, CheckCircle2, XCircle, Sparkles } from "lucide-react";
 import { webSearch } from "../utils";
+import { useModel } from "../contexts/ModelContext";
 
 export default function SettingsPanel({ onClose }) {
-  const [testStatus, setTestStatus] = useState(null); // null | "testing" | "ok" | "error"
+  const { smartDecoding, updateSmartDecoding } = useModel();
+  const [testStatus, setTestStatus] = useState(null);
   const [testResult, setTestResult] = useState("");
 
   const handleTest = async () => {
@@ -56,6 +58,40 @@ export default function SettingsPanel({ onClose }) {
             >
               {testStatus === "testing" ? "Testing..." : "Test Search Connection"}
             </button>
+          </div>
+
+          {/* Smart Decoding */}
+          <div className="border-t border-dm-outline pt-4">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-dm-blue" />
+                <span className="text-xs font-medium text-dm-text">Smart Decoding</span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={smartDecoding}
+                onClick={() => updateSmartDecoding(!smartDecoding)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                  smartDecoding ? "bg-dm-blue" : "bg-dm-surface-higher"
+                }`}
+              >
+                <span
+                  className={`inline-block size-4 transform rounded-full bg-white transition-transform ${
+                    smartDecoding ? "translate-x-4" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-xs text-dm-text-secondary leading-relaxed">
+              Entropy-gated top-K sampling that tightens token selection on uncertain
+              steps. May improve answer quality on hard reasoning questions
+              (~1-3% gain). Switches from greedy to low-temperature (0.4) sampling,
+              so answers may vary slightly between runs. ~5% latency overhead.
+              <span className="block mt-1 text-dm-text-secondary/80">
+                Independent of Thinking mode — works with thinking off.
+              </span>
+            </p>
           </div>
 
           {/* Test result */}

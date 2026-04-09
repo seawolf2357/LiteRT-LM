@@ -15,6 +15,7 @@ import {
   SPECIAL_TOKEN_REGEX,
 } from "../constants";
 import { parseToolCalls, buildChatMessages, decodeImage, webSearch } from "../utils";
+import { EntropyGatedTopK } from "../lib/EntropyGatedTopK";
 
 const ModelContext = createContext(null);
 
@@ -43,6 +44,15 @@ export function ModelProvider({ children }) {
   const processorRef = useRef(null);
   const loadPromiseRef = useRef(null);
   const stoppingCriteria = useRef(new InterruptableStoppingCriteria());
+
+  // Smart Decoding (entropy-gated top-k) - opt-in, persists in localStorage
+  const [smartDecoding, setSmartDecoding] = useState(
+    () => localStorage.getItem("vidraft_smart_decoding") === "true",
+  );
+  const updateSmartDecoding = useCallback((enabled) => {
+    setSmartDecoding(enabled);
+    localStorage.setItem("vidraft_smart_decoding", String(enabled));
+  }, []);
 
   /** All tools always active — search uses DuckDuckGo (no key needed) */
   const getActiveTools = useCallback(() => [...TOOLS, SEARCH_TOOL], []);
@@ -159,13 +169,26 @@ export function ModelProvider({ children }) {
 
     stoppingCriteria.current.reset();
 
-    const output = await model.generate({
+    // Smart Decoding: switch to low-temperature sampling + entropy-gated top-k
+    // This is a logit-only approximation of MTI/CFG (no second forward pass).
+    // Helps on uncertain reasoning steps; no effect on confident predictions.
+    const generateConfig = {
       ...inputs,
       max_new_tokens: options.maxNewTokens || 2048,
-      do_sample: false,
       streamer,
       stopping_criteria: [stoppingCriteria.current],
-    });
+    };
+
+    if (smartDecoding) {
+      generateConfig.do_sample = true;
+      generateConfig.temperature = 0.4;
+      generateConfig.top_p = 0.95;
+      generateConfig.logits_processor = [new EntropyGatedTopK()];
+    } else {
+      generateConfig.do_sample = false;
+    }
+
+    const output = await model.generate(generateConfig);
 
     if (buffer) {
       const cleaned = buffer.replace(SPECIAL_TOKEN_REGEX, "");
@@ -178,7 +201,7 @@ export function ModelProvider({ children }) {
     )[0];
 
     return { text: fullText, rawOutput };
-  }, []);
+  }, [smartDecoding]);
 
   const transcribeAudio = useCallback(async (audioData) => {
     const processor = processorRef.current;
@@ -417,6 +440,7 @@ export function ModelProvider({ children }) {
     <ModelContext.Provider
       value={{
         loadState, loadProgress, loadModel, generate, analyzeFrame, stopGeneration,
+        smartDecoding, updateSmartDecoding,
       }}
     >
       {children}
