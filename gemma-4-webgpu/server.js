@@ -55,8 +55,8 @@ app.get("/api/search", async (req, res) => {
   }
 });
 
-// SPA fallback
-app.get("*", (req, res) => {
+// SPA fallback (Express v5 requires named param for wildcard)
+app.get("/{*path}", (req, res) => {
   res.sendFile(join(__dirname, "dist", "index.html"));
 });
 
