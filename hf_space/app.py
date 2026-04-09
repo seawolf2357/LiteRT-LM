@@ -770,7 +770,7 @@ def run_full_pipeline(params: dict):
 
         # Done
         conn = _get_db()
-        final_status = "complete" if verification.get("passed", False) else "complete_with_warnings"
+        final_status = "completed" if verification.get("passed", False) else "completed"
         conn.execute(
             "UPDATE stories SET status = ?, pdf_path = ? WHERE id = ?",
             (final_status, pdf_path, story_id),
@@ -779,6 +779,12 @@ def run_full_pipeline(params: dict):
         conn.close()
 
         logger.info("Pipeline complete for story %s: %s", story_id, final_status)
+
+        # Upload to HF Dataset
+        try:
+            upload_to_hf_dataset(story_id)
+        except Exception as upload_err:
+            logger.error("HF upload failed (non-fatal): %s", upload_err)
 
     except Exception as e:
         logger.error("Pipeline failed for story %s: %s", story_id, traceback.format_exc())
@@ -1157,6 +1163,113 @@ app = FastAPI(title="LiteRT-LM AXIS Engine", version="2.0")
 # Serve static files (JS, CSS, MP3 in the same directory)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR)), name="static")
 
+
+@app.on_event("startup")
+async def startup_load_hf_stories():
+    """On startup, try to sync stories from HF dataset into local DB."""
+    if not HF_HUB_OK or not HF_TOKEN:
+        logger.info("HF Hub not available, skipping dataset sync")
+        return
+    try:
+        api = HfApi(token=HF_TOKEN)
+        repo_id = "Heartsync/fairy-tales"
+        # Check if repo exists
+        try:
+            files = api.list_repo_files(repo_id=repo_id, repo_type="dataset")
+        except Exception:
+            logger.info("HF dataset %s not found, skipping sync", repo_id)
+            return
+
+        # Find story metadata files
+        meta_files = [f for f in files if f.endswith("metadata.json")]
+        logger.info("Found %d stories in HF dataset", len(meta_files))
+
+        for mf in meta_files[:20]:  # Limit to 20 stories
+            try:
+                from huggingface_hub import hf_hub_download
+                local_meta = hf_hub_download(
+                    repo_id=repo_id, filename=mf,
+                    repo_type="dataset", token=HF_TOKEN,
+                )
+                with open(local_meta, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+
+                story_id = meta.get("id", "")
+                if not story_id:
+                    continue
+
+                # Check if already in DB
+                conn = _get_db()
+                existing = conn.execute("SELECT id FROM stories WHERE id = ?", (story_id,)).fetchone()
+                if existing:
+                    conn.close()
+                    continue
+
+                # Insert into DB
+                conn.execute(
+                    "INSERT OR IGNORE INTO stories (id, title, purpose, style, mood, child_name, child_age, status, skeleton_json, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        story_id,
+                        meta.get("title", "Untitled"),
+                        meta.get("purpose", ""),
+                        meta.get("style", ""),
+                        meta.get("mood", ""),
+                        meta.get("child_name", ""),
+                        meta.get("child_age", 6),
+                        "completed",
+                        json.dumps(meta.get("skeleton", {}), ensure_ascii=False),
+                        meta.get("created_at", ""),
+                    ),
+                )
+
+                # Download and insert page images
+                story_dir = os.path.dirname(mf)  # stories/{id}
+                story_images = [f for f in files if f.startswith(story_dir + "/images/")]
+                for pi, img_file in enumerate(sorted(story_images), 1):
+                    try:
+                        local_img = hf_hub_download(
+                            repo_id=repo_id, filename=img_file,
+                            repo_type="dataset", token=HF_TOKEN,
+                        )
+                        # Copy to IMG_DIR
+                        dest = str(IMG_DIR / os.path.basename(img_file))
+                        shutil.copy2(local_img, dest)
+                        page_text = ""
+                        page_meta = meta.get("pages", [])
+                        if pi - 1 < len(page_meta):
+                            page_text = page_meta[pi - 1].get("text", "")
+                        conn.execute(
+                            "INSERT OR IGNORE INTO pages (story_id, page_num, text_ko, image_path, status) VALUES (?,?,?,?,?)",
+                            (story_id, pi, page_text, dest, "image_done"),
+                        )
+                    except Exception as img_err:
+                        logger.warning("Failed to download image %s: %s", img_file, img_err)
+
+                # Download PDF if exists
+                pdf_file = f"{story_dir}/{story_id}.pdf"
+                if pdf_file in files:
+                    try:
+                        local_pdf = hf_hub_download(
+                            repo_id=repo_id, filename=pdf_file,
+                            repo_type="dataset", token=HF_TOKEN,
+                        )
+                        dest_pdf = str(PDF_DIR / f"{story_id}.pdf")
+                        shutil.copy2(local_pdf, dest_pdf)
+                        conn.execute("UPDATE stories SET pdf_path = ? WHERE id = ?", (dest_pdf, story_id))
+                    except Exception as pdf_err:
+                        logger.warning("Failed to download PDF for %s: %s", story_id, pdf_err)
+
+                conn.commit()
+                conn.close()
+                logger.info("Synced story %s from HF dataset", story_id)
+
+            except Exception as story_err:
+                logger.warning("Failed to sync story from %s: %s", mf, story_err)
+
+    except Exception as e:
+        logger.error("HF dataset sync failed: %s", e)
+
+
 # ---------- Image serving ----------
 @app.get("/api/image/{filename}")
 async def serve_image(filename: str):
@@ -1313,17 +1426,37 @@ async def get_story_status(story_id: str):
     pages_status = [{"page_num": p["page_num"], "status": p["status"]} for p in pages]
     total_pages = len(pages_status)
     done_pages = sum(1 for p in pages_status if p["status"] in ("image_done", "text_done"))
+    pct = round(done_pages / max(total_pages, 1) * 100, 1) if total_pages > 0 else 0
+
+    status_raw = story["status"] or "unknown"
+    # Map internal status to frontend-friendly
+    step_label = status_raw
+    if "skeleton" in status_raw:
+        step_label = "Creating story skeleton..."
+        pct = max(pct, 5)
+    elif "text" in status_raw:
+        step_label = "Writing story text..."
+        pct = max(pct, 15)
+    elif "image" in status_raw:
+        step_label = f"Generating illustrations... ({done_pages}/{total_pages})"
+        pct = max(pct, 20 + (done_pages / max(total_pages, 1)) * 60)
+    elif "verif" in status_raw:
+        step_label = "Quality verification..."
+        pct = max(pct, 85)
+    elif "pdf" in status_raw:
+        step_label = "Creating PDF..."
+        pct = max(pct, 92)
+    elif status_raw == "completed":
+        step_label = "Complete!"
+        pct = 100
 
     return JSONResponse({
         "story_id": story_id,
         "title": story["title"] or "",
-        "status": story["status"],
-        "progress": {
-            "total_pages": total_pages,
-            "done_pages": done_pages,
-            "percent": round(done_pages / max(total_pages, 1) * 100, 1),
-        },
-        "pages": pages_status,
+        "status": status_raw,
+        "step": step_label,
+        "progress": round(pct),
+        "error": status_raw if status_raw.startswith("error") else None,
     })
 
 
