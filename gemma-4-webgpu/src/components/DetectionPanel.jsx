@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Play, Square, X, ScanSearch } from "lucide-react";
+import { Play, Square, X, ScanSearch, RotateCcw } from "lucide-react";
 import { useModel } from "../contexts/ModelContext";
 import { useMedia } from "../contexts/MediaContext";
 import DetectionResult from "./DetectionResult";
@@ -24,6 +24,10 @@ function createThumbnail(dataUrl, maxSize = 200) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export default function DetectionPanel({ onClose }) {
   const { analyzeFrame } = useModel();
   const { captureFrameAsync, videoSource } = useMedia();
@@ -35,6 +39,7 @@ export default function DetectionPanel({ onClose }) {
   const [results, setResults] = useState([]);
   const [elapsed, setElapsed] = useState(0);
   const [detectedCount, setDetectedCount] = useState(0);
+  const [currentStatus, setCurrentStatus] = useState("");
 
   const cancelledRef = useRef(false);
   const resultsRef = useRef([]);
@@ -51,32 +56,62 @@ export default function DetectionPanel({ onClose }) {
     setIsRunning(true);
     setResults([]);
     setDetectedCount(0);
+    setElapsed(0);
+    setCurrentStatus("Starting...");
     cancelledRef.current = false;
     resultsRef.current = [];
 
     const startTime = Date.now();
-    const endTime = startTime + duration * 1000;
-    const intervalMs = Math.max(interval, 3) * 1000; // minimum 3s
+    const durationMs = duration * 1000;
+    const intervalMs = Math.max(interval, 3) * 1000;
+    let iterationCount = 0;
 
-    while (Date.now() < endTime && !cancelledRef.current) {
-      const now = Date.now();
-      const elapsedSec = ((now - startTime) / 1000).toFixed(1);
+    while (!cancelledRef.current) {
+      const loopStart = Date.now();
+      const elapsedMs = loopStart - startTime;
+
+      // Check if we exceeded duration
+      if (elapsedMs >= durationMs) break;
+
+      const elapsedSec = (elapsedMs / 1000).toFixed(1);
       setElapsed(parseFloat(elapsedSec));
+      iterationCount++;
 
-      // Capture frame
-      const frame = await captureFrameAsync();
+      // Step 1: Capture frame
+      setCurrentStatus(`Capturing frame #${iterationCount}...`);
+      let frame = null;
+      for (let retry = 0; retry < 3 && !frame; retry++) {
+        frame = await captureFrameAsync();
+        if (!frame && retry < 2) await sleep(300);
+      }
+
       if (!frame) {
-        // Skip this iteration if capture fails
-        await new Promise((r) => setTimeout(r, 1000));
+        const result = {
+          id: `det-${Date.now()}`,
+          time: elapsedSec,
+          detected: false,
+          description: "Frame capture failed",
+          thumbnail: null,
+        };
+        resultsRef.current = [...resultsRef.current, result];
+        setResults([...resultsRef.current]);
+        // Still continue the loop
+        await sleep(intervalMs);
         continue;
       }
 
-      // Create thumbnail for display
+      if (cancelledRef.current) break;
+
+      // Step 2: Create thumbnail
       const thumbnail = await createThumbnail(frame);
 
-      // Analyze with model
+      // Step 3: Analyze with model
+      setCurrentStatus(`Analyzing frame #${iterationCount}...`);
       try {
         const analysis = await analyzeFrame(frame, condition);
+
+        if (cancelledRef.current) break;
+
         const result = {
           id: `det-${Date.now()}`,
           time: elapsedSec,
@@ -89,11 +124,13 @@ export default function DetectionPanel({ onClose }) {
         setResults([...resultsRef.current]);
         if (analysis.detected) setDetectedCount((c) => c + 1);
       } catch (err) {
+        if (cancelledRef.current) break;
+
         const result = {
           id: `det-${Date.now()}`,
           time: elapsedSec,
           detected: false,
-          description: `Analysis error: ${err.message}`,
+          description: `Error: ${err.message}`,
           thumbnail,
         };
         resultsRef.current = [...resultsRef.current, result];
@@ -102,19 +139,33 @@ export default function DetectionPanel({ onClose }) {
 
       if (cancelledRef.current) break;
 
-      // Wait for next interval (subtract analysis time)
-      const analysisTime = Date.now() - now;
-      const waitTime = Math.max(0, intervalMs - analysisTime);
-      if (waitTime > 0 && Date.now() + waitTime < endTime) {
-        await new Promise((r) => setTimeout(r, waitTime));
+      // Step 4: Wait for next interval
+      const analysisTime = Date.now() - loopStart;
+      const waitTime = Math.max(1000, intervalMs - analysisTime);
+
+      setCurrentStatus(`Next scan in ${Math.ceil(waitTime / 1000)}s...`);
+
+      // Wait in small chunks so we can check cancelled
+      const waitEnd = Date.now() + waitTime;
+      while (Date.now() < waitEnd && !cancelledRef.current) {
+        await sleep(Math.min(500, waitEnd - Date.now()));
       }
     }
 
+    setCurrentStatus(cancelledRef.current ? "Stopped" : "Completed");
     setIsRunning(false);
   }, [condition, duration, interval, videoSource, captureFrameAsync, analyzeFrame]);
 
   const stopDetection = useCallback(() => {
     cancelledRef.current = true;
+    setCurrentStatus("Stopping...");
+  }, []);
+
+  const resetPanel = useCallback(() => {
+    setResults([]);
+    setElapsed(0);
+    setDetectedCount(0);
+    setCurrentStatus("");
   }, []);
 
   const isWebcamOrVideo = videoSource === "webcam" || videoSource === "file";
@@ -138,7 +189,7 @@ export default function DetectionPanel({ onClose }) {
           </button>
         </div>
 
-        {/* Settings */}
+        {/* Settings (shown when not running and no results) */}
         {!isRunning && results.length === 0 && (
           <div className="flex flex-col gap-4 p-4">
             {!isWebcamOrVideo && (
@@ -208,7 +259,7 @@ export default function DetectionPanel({ onClose }) {
                 {isRunning && (
                   <span className="flex items-center gap-1.5">
                     <span className="inline-block size-2 animate-pulse rounded-full bg-dm-red" />
-                    Scanning...
+                    Running
                   </span>
                 )}
                 <span className="font-mono">{elapsed}s / {duration}s</span>
@@ -227,10 +278,11 @@ export default function DetectionPanel({ onClose }) {
               ) : (
                 <button
                   type="button"
-                  onClick={() => { setResults([]); setElapsed(0); setDetectedCount(0); }}
-                  className="text-xs text-dm-text-secondary hover:text-dm-text"
+                  onClick={resetPanel}
+                  className="flex items-center gap-1.5 text-xs text-dm-text-secondary hover:text-dm-text"
                 >
-                  Clear & Restart
+                  <RotateCcw className="size-3" />
+                  New Detection
                 </button>
               )}
             </div>
@@ -242,6 +294,11 @@ export default function DetectionPanel({ onClose }) {
                 style={{ width: `${Math.min(100, (elapsed / duration) * 100)}%` }}
               />
             </div>
+
+            {/* Current status */}
+            {currentStatus && (
+              <div className="text-xs text-dm-text-secondary italic">{currentStatus}</div>
+            )}
 
             {/* Condition reminder */}
             <div className="rounded-lg bg-dm-surface-high/60 px-3 py-1.5 text-xs text-dm-text-secondary">
@@ -266,7 +323,7 @@ export default function DetectionPanel({ onClose }) {
             {/* Completion message */}
             {!isRunning && results.length > 0 && (
               <div className="rounded-xl bg-dm-surface-high px-3 py-2 text-center text-xs text-dm-text-secondary">
-                Detection completed — {results.length} captures, {detectedCount} matches
+                Detection {cancelledRef.current ? "stopped" : "completed"} — {results.length} captures, {detectedCount} matches
               </div>
             )}
           </div>

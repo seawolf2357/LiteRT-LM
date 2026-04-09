@@ -181,34 +181,29 @@ function readImageFile(file) {
 }
 
 /**
- * Extract text from a PDF using pdf.js (loaded from CDN).
- * Falls back gracefully if pdf.js is not available.
+ * Extract text from a PDF using pdf.js (loaded from CDN via script tag).
  */
 async function readPdfFile(file) {
   try {
-    // Dynamically load pdf.js from CDN
+    // Load pdf.js via script tag if not already loaded
     if (!window.pdfjsLib) {
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs";
-      script.type = "module";
-
-      // Use a simpler approach: fetch and eval the UMD build
-      const res = await fetch(
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs",
-      );
-      if (!res.ok) throw new Error("Failed to load pdf.js");
-      const code = await res.text();
-      const blob = new Blob([code], { type: "application/javascript" });
-      const url = URL.createObjectURL(blob);
-      const module = await import(/* @vite-ignore */ url);
-      URL.revokeObjectURL(url);
-      window.pdfjsLib = module;
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+        script.onload = resolve;
+        script.onerror = () => reject(new Error("Failed to load pdf.js"));
+        document.head.appendChild(script);
+      });
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      }
     }
 
+    if (!window.pdfjsLib) throw new Error("pdf.js not available");
+
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
     const pages = [];
     const maxPages = Math.min(pdf.numPages, 20);
 
@@ -229,7 +224,15 @@ async function readPdfFile(file) {
     return result;
   } catch (err) {
     console.error("PDF extraction failed:", err);
-    return null;
+    // Fallback: read as raw text (may contain some readable content)
+    try {
+      const text = await file.text();
+      const cleaned = text.replace(/[^\x20-\x7E\n\r\t]/g, " ").replace(/\s{3,}/g, " ").trim();
+      if (cleaned.length > 100) {
+        return cleaned.slice(0, MAX_FILE_CHARS) + "\n\n(Raw extraction - PDF parsing failed)";
+      }
+    } catch {}
+    return "[PDF upload detected but text extraction failed. The PDF may be image-based or encrypted.]";
   }
 }
 
@@ -249,7 +252,7 @@ export async function processUploadedFile(file) {
 
   if (isPdfFile(file)) {
     const text = await readPdfFile(file);
-    return text ? { text, fileName, fileType: "pdf" } : null;
+    return { text: text || "[Failed to extract PDF content]", fileName, fileType: "pdf" };
   }
 
   if (isTextFile(file)) {

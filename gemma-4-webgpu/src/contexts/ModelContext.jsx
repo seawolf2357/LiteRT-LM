@@ -273,12 +273,14 @@ export function ModelProvider({ children }) {
       { add_special_tokens: false },
     );
 
-    stoppingCriteria.current.reset();
+    // Use a fresh stopping criteria for each detection call
+    // to avoid interference from chat's stopGeneration()
+    const detectionCriteria = new InterruptableStoppingCriteria();
     const output = await model.generate({
       ...inputs,
       max_new_tokens: 256,
       do_sample: false,
-      stopping_criteria: [stoppingCriteria.current],
+      stopping_criteria: [detectionCriteria],
     });
 
     const rawText = processor
