@@ -11,13 +11,18 @@ import asyncio, threading, traceback, tempfile, pathlib, logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-import requests, fal_client
+import requests
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 # Optional imports (graceful fallback)
+try:
+    import fal_client
+except ImportError:
+    fal_client = None
+
 try:
     import fitz  # PyMuPDF
 except ImportError:
@@ -51,6 +56,7 @@ FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"
 LLM_MODEL = "accounts/fireworks/models/kimi-k2p5"
 VLM_MODEL = "accounts/fireworks/models/qwen3-vl-235b-a22b-instruct"
 
+BASE_DIR = pathlib.Path(__file__).parent
 DATA_DIR = pathlib.Path("/tmp/axis_data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 PDF_DIR = DATA_DIR / "pdfs"
@@ -221,8 +227,8 @@ def vlm_analyze(image_url: str, prompt: str, max_tokens: int = 1024) -> str:
 
 def generate_image_fal(prompt: str) -> str:
     """Generate image using FAL Grok Imagine and return URL."""
-    if not FAL_KEY:
-        logger.warning("FAL_KEY not set, skipping image generation")
+    if not FAL_KEY or fal_client is None:
+        logger.warning("FAL_KEY not set or fal_client not installed, skipping image generation")
         return ""
     os.environ["FAL_KEY"] = FAL_KEY
     try:
@@ -1037,26 +1043,36 @@ BUILT_IN_PDFS = {
     "prompt": {
         "label": "Prompt Engineering",
         "url": "https://huggingface.co/spaces/Heartsync/3d-kid/resolve/main/prompt.pdf",
+        "local_app_dir": str(BASE_DIR / "prompt.pdf"),
         "local": str(PDF_DIR / "prompt.pdf"),
     },
     "ktx2512": {
         "label": "KTX 2512",
         "url": "https://huggingface.co/spaces/Heartsync/3d-kid/resolve/main/ktx2512.pdf",
+        "local_app_dir": str(BASE_DIR / "ktx2512.pdf"),
         "local": str(PDF_DIR / "ktx2512.pdf"),
     },
 }
 
 
 def ensure_pdf_downloaded(key: str) -> str:
-    """Download a built-in PDF if not already cached locally."""
+    """Download a built-in PDF if not already cached locally. Check app dir first."""
     info = BUILT_IN_PDFS.get(key)
     if not info:
         return ""
+    # Check if PDF exists in app directory (same dir as app.py)
+    app_dir_path = info.get("local_app_dir", "")
+    if app_dir_path and os.path.exists(app_dir_path):
+        return app_dir_path
     local_path = info["local"]
     if os.path.exists(local_path):
         return local_path
+    # Download with auth header for private spaces
     try:
-        resp = requests.get(info["url"], timeout=120)
+        headers = {}
+        if HF_TOKEN:
+            headers["Authorization"] = f"Bearer {HF_TOKEN}"
+        resp = requests.get(info["url"], headers=headers, timeout=120)
         resp.raise_for_status()
         with open(local_path, "wb") as f:
             f.write(resp.content)
@@ -1137,6 +1153,9 @@ def chatbot_answer(pdf_key: str, question: str, page_idx: int = 0) -> str:
 # 13. FastAPI Endpoints (existing + new)
 # ============================================================
 app = FastAPI(title="LiteRT-LM AXIS Engine", version="2.0")
+
+# Serve static files (JS, CSS, MP3 in the same directory)
+app.mount("/static", StaticFiles(directory=str(BASE_DIR)), name="static")
 
 # ---------- Image serving ----------
 @app.get("/api/image/{filename}")
@@ -2317,4 +2336,5 @@ if __name__ == "__main__":
     logger.info("Fireworks API key set: %s", bool(FIREWORKS_API_KEY))
     logger.info("FAL key set: %s", bool(FAL_KEY))
     logger.info("HF token set: %s", bool(HF_TOKEN))
+    uvicorn.run("app:app", host="0.0.0.0", port=int(os.getenv("PORT", 7860)))
     uvicorn.run(app, host="0.0.0.0", port=7860)
