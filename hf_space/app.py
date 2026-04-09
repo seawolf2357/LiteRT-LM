@@ -1176,44 +1176,61 @@ async def list_pdfs():
     return JSONResponse(result)
 
 
-@app.get("/api/pdf/{pdf_key}/pages")
-async def get_pdf_pages(pdf_key: str):
-    """Get total page count for a built-in PDF (no heavy base64 payload)."""
+# Server-side page cache: {pdf_key: {page_idx: b64_str}}
+_page_b64_cache: Dict[str, Dict[int, str]] = {}
+_pdf_doc_cache: Dict[str, Any] = {}  # keep fitz.Document open
+_pdf_total_cache: Dict[str, int] = {}
+
+def _get_pdf_doc(pdf_key: str):
+    """Get or open a cached fitz document."""
+    if pdf_key in _pdf_doc_cache:
+        return _pdf_doc_cache[pdf_key], _pdf_total_cache[pdf_key]
     local_path = ensure_pdf_downloaded(pdf_key)
     if not local_path or fitz is None:
+        return None, 0
+    doc = fitz.open(local_path)
+    _pdf_doc_cache[pdf_key] = doc
+    _pdf_total_cache[pdf_key] = doc.page_count
+    return doc, doc.page_count
+
+def _render_page_b64(pdf_key: str, page_idx: int) -> str:
+    """Render a single page to JPEG base64, with cache."""
+    cache = _page_b64_cache.setdefault(pdf_key, {})
+    if page_idx in cache:
+        return cache[page_idx]
+    doc, total = _get_pdf_doc(pdf_key)
+    if not doc or page_idx < 0 or page_idx >= total:
+        return ""
+    page = doc.load_page(page_idx)
+    # Low DPI (1.2x = ~86 DPI) + JPEG 72% for speed
+    mat = fitz.Matrix(1.2, 1.2)
+    pix = page.get_pixmap(matrix=mat)
+    img_bytes = pix.tobytes("jpeg", 72)
+    b64 = base64.b64encode(img_bytes).decode("utf-8")
+    cache[page_idx] = b64
+    return b64
+
+
+@app.get("/api/pdf/{pdf_key}/pages")
+async def get_pdf_pages(pdf_key: str):
+    """Get total page count + first page (fast start)."""
+    doc, total = _get_pdf_doc(pdf_key)
+    if not doc:
         raise HTTPException(404, "PDF not found or could not be processed")
-    try:
-        doc = fitz.open(local_path)
-        total = doc.page_count
-        doc.close()
-        return JSONResponse({"pdf_key": pdf_key, "total_pages": total})
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    first_page = _render_page_b64(pdf_key, 0)
+    return JSONResponse({"pdf_key": pdf_key, "total_pages": total, "first_page": first_page})
 
 
 @app.get("/api/pdf/{pdf_key}/page/{page_idx}")
 async def get_pdf_single_page(pdf_key: str, page_idx: int):
-    """Get a single PDF page as base64 image (lazy loading)."""
-    local_path = ensure_pdf_downloaded(pdf_key)
-    if not local_path or fitz is None:
+    """Get a single PDF page as base64 JPEG (cached)."""
+    doc, total = _get_pdf_doc(pdf_key)
+    if not doc:
         raise HTTPException(404, "PDF not found")
-    try:
-        doc = fitz.open(local_path)
-        if page_idx < 0 or page_idx >= doc.page_count:
-            doc.close()
-            raise HTTPException(404, "Page index out of range")
-        page = doc.load_page(page_idx)
-        mat = fitz.Matrix(150 / 72, 150 / 72)
-        pix = page.get_pixmap(matrix=mat)
-        img_bytes = pix.tobytes("jpeg", 85)
-        b64 = base64.b64encode(img_bytes).decode("utf-8")
-        total = doc.page_count
-        doc.close()
-        return JSONResponse({"pdf_key": pdf_key, "page_idx": page_idx, "total_pages": total, "image": b64})
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    if page_idx < 0 or page_idx >= total:
+        raise HTTPException(404, "Page index out of range")
+    b64 = _render_page_b64(pdf_key, page_idx)
+    return JSONResponse({"pdf_key": pdf_key, "page_idx": page_idx, "total_pages": total, "image": b64})
 
 
 @app.post("/api/pdf/{pdf_key}/analyze")
@@ -2128,7 +2145,7 @@ async function loadPdf(key) {
     pageCache = {};
     totalPdfPages = 0;
     document.getElementById('loading-overlay').style.display = 'flex';
-    document.getElementById('loading-overlay').querySelector('p').textContent = 'Loading PDF...';
+    document.getElementById('loading-overlay').querySelector('p').textContent = 'Loading...';
     document.querySelectorAll('.pdf-switch-btns button').forEach(b => {
         b.classList.toggle('active', b.dataset.key === key);
     });
@@ -2140,10 +2157,20 @@ async function loadPdf(key) {
             document.getElementById('loading-overlay').querySelector('p').textContent = 'No pages found';
             return;
         }
-        await loadAndRenderPage(0);
+        // First page comes with the response - render immediately
+        if (data.first_page) {
+            pageCache[0] = data.first_page;
+            renderPageFromB64(data.first_page);
+        } else {
+            await loadAndRenderPage(0);
+        }
+        // Preload page 1
+        if (totalPdfPages > 1 && !pageCache[1]) {
+            fetch('/api/pdf/' + key + '/page/1').then(r=>r.json()).then(d=>{ pageCache[1]=d.image; });
+        }
     } catch(e) {
         console.error('Failed to load PDF:', e);
-        document.getElementById('loading-overlay').querySelector('p').textContent = 'Failed to load PDF: ' + e.message;
+        document.getElementById('loading-overlay').querySelector('p').textContent = 'Failed: ' + e.message;
     }
 }
 
