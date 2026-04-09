@@ -2096,10 +2096,7 @@ function toggleGallery() {
     if (g.classList.contains('open')) loadGallery();
 }
 
-// ===== FLIPBOOK RENDERING (Canvas-based) =====
-const canvas = document.getElementById('flipbook-canvas');
-const ctx = canvas.getContext('2d');
-
+// ===== FLIPBOOK RENDERING =====
 function renderPage() {
     // For story flipbook pages (loaded all at once)
     if (flipPages.length > 0) {
@@ -2417,9 +2414,20 @@ async function sendChat() {
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', function() {
+    console.log('[INIT] DOMContentLoaded fired');
     initPdfButtons();
-    loadPdf('prompt');
+    loadPdf('prompt').catch(function(e) {
+        console.error('[INIT] loadPdf failed:', e);
+        var overlay = document.getElementById('loading-overlay');
+        if (overlay) overlay.querySelector('p').textContent = 'Error: ' + e.message;
+    });
 });
+
+window.onerror = function(msg, url, line) {
+    console.error('[GLOBAL ERROR]', msg, 'at line', line);
+    var overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.querySelector('p').textContent = 'JS Error: ' + msg;
+};
 </script>
 </body>
 </html>"""
