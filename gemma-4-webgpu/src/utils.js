@@ -314,30 +314,49 @@ export function computeAudioBars(data, numBars) {
  */
 /**
  * Perform a web search using Brave Search API.
+ * Tries direct request first, falls back to CORS proxy if blocked.
  * Returns formatted text with top results.
  */
 export async function braveSearch(query, apiKey) {
-  const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
-  const res = await fetch(url, {
-    headers: {
-      "X-Subscription-Token": apiKey,
-      Accept: "application/json",
-    },
-  });
+  const baseUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
+  const headers = {
+    "X-Subscription-Token": apiKey,
+    "Accept": "application/json",
+  };
+
+  let res;
+  try {
+    // Try direct request first
+    res = await fetch(baseUrl, { headers });
+  } catch (directErr) {
+    // CORS blocked — try via proxy
+    console.warn("Brave Search direct failed, trying CORS proxy:", directErr.message);
+    try {
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(baseUrl)}`;
+      res = await fetch(proxyUrl, {
+        headers: { "X-Subscription-Token": apiKey },
+      });
+    } catch (proxyErr) {
+      throw new Error(`Search failed (CORS blocked). Try a different browser or disable extensions. ${directErr.message}`);
+    }
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    throw new Error(`Brave Search API error ${res.status}: ${errText.slice(0, 200)}`);
+    if (res.status === 401 || res.status === 422) {
+      throw new Error("Invalid Brave API key. Check Settings.");
+    }
+    throw new Error(`Brave API error ${res.status}: ${errText.slice(0, 100)}`);
   }
 
   const data = await res.json();
   const results = data.web?.results || [];
 
-  if (results.length === 0) return "No search results found.";
+  if (results.length === 0) return "No search results found for: " + query;
 
   return results
     .slice(0, 5)
-    .map((r, i) => `${i + 1}. **${r.title}**\n   ${r.description}\n   URL: ${r.url}`)
+    .map((r, i) => `${i + 1}. ${r.title}\n   ${r.description || ""}\n   ${r.url}`)
     .join("\n\n");
 }
 

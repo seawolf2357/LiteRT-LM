@@ -243,14 +243,17 @@ export function ModelProvider({ children }) {
     if (!canvas) return { detected: false, description: "Failed to decode frame" };
 
     const prompt =
-      `You are a precise visual detection system. Your task is to determine if a SPECIFIC condition is met in this image.\n\n` +
-      `CONDITION TO CHECK: "${condition}"\n\n` +
-      `RULES:\n` +
-      `- Only respond "detected": true if the condition is CLEARLY and UNAMBIGUOUSLY visible\n` +
-      `- If you are unsure, respond "detected": false\n` +
-      `- Do NOT guess or assume things that are not clearly visible\n` +
-      `- Be strict: partial matches count as false\n\n` +
-      `Respond with ONLY this JSON: {"detected": true or false, "description": "what you actually see"}`;
+      `You are a strict visual detection system. Determine if this EXACT condition is present:\n` +
+      `CONDITION: "${condition}"\n\n` +
+      `CRITICAL RULES:\n` +
+      `1. ONLY report detected:true if the condition matches EXACTLY — not something similar\n` +
+      `2. Similar but DIFFERENT things must be detected:false. Examples:\n` +
+      `   - If condition is "V sign": thumbs up = false, peace sign = true, pointing = false\n` +
+      `   - If condition is "cat": dog = false, cat toy = false, real cat = true\n` +
+      `   - If condition is "red car": blue car = false, red truck = false\n` +
+      `3. When uncertain, ALWAYS choose detected:false\n` +
+      `4. Describe what you ACTUALLY see, not what you think matches\n\n` +
+      `JSON response ONLY: {"detected": true/false, "description": "what is actually visible"}`;
 
     const inputs = await processor(
       processor.apply_chat_template(
@@ -334,25 +337,28 @@ export function ModelProvider({ children }) {
 
       // Auto web search: if API key exists and query looks like a search
       if (braveApiKey && looksLikeSearchQuery(lastMessage?.content || "")) {
+        let searchResults = null;
+        let searchError = null;
         try {
-          const searchResults = await braveSearch(lastMessage.content, braveApiKey);
-          // Inject search results into the message for the model
-          const enrichedMessages = [
-            { role: "system", content: "You are VIDRAFT AI. Use the web search results below to answer the user's question accurately. Cite sources when relevant." },
-            ...messages.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
-            {
-              role: "user",
-              content: `${lastMessage.content}\n\n[Web Search Results]\n${searchResults}`,
-            },
-          ];
-          const { text } = await runGeneration(enrichedMessages, onToken, {
-            enableThinking,
-            maxNewTokens: 2048,
-          });
-          return text;
+          searchResults = await braveSearch(lastMessage.content, braveApiKey);
         } catch (err) {
-          console.error("Auto search failed:", err);
-          // Fall through to normal generation
+          searchError = err.message;
+          console.error("Web search failed:", err);
+        }
+
+        if (searchResults) {
+          const enrichedMessages = [
+            { role: "system", content: "You are VIDRAFT AI. Use the web search results below to answer the user's question accurately and concisely. Cite sources when relevant." },
+            ...messages.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
+            { role: "user", content: `${lastMessage.content}\n\n[Web Search Results]\n${searchResults}` },
+          ];
+          const { text } = await runGeneration(enrichedMessages, onToken, { enableThinking, maxNewTokens: 2048 });
+          return text;
+        }
+
+        if (searchError) {
+          // Show search error to user, then proceed with normal generation
+          onToken(`[Web search failed: ${searchError}]\n\n`, "content");
         }
       }
 
