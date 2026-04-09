@@ -180,59 +180,140 @@ function readImageFile(file) {
   });
 }
 
+/** Load pdf.js library from CDN */
+async function loadPdfJs() {
+  if (window.pdfjsLib) return window.pdfjsLib;
+
+  // Use worker-disabled mode to avoid CORS issues with worker file
+  await new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    script.onload = resolve;
+    script.onerror = () => reject(new Error("Failed to load pdf.js from CDN"));
+    document.head.appendChild(script);
+  });
+
+  if (!window.pdfjsLib) throw new Error("pdf.js not available after loading");
+
+  // Disable worker to avoid CORS issues in iframe/HF Spaces
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+
+  return window.pdfjsLib;
+}
+
 /**
- * Extract text from a PDF using pdf.js (loaded from CDN via script tag).
+ * Extract text from a single PDF page, preserving line structure.
+ */
+function extractPageText(content) {
+  if (!content.items || content.items.length === 0) return "";
+
+  const lines = [];
+  let currentLine = "";
+  let lastY = null;
+
+  for (const item of content.items) {
+    const text = item.str;
+    if (!text) continue;
+
+    // Detect line breaks by Y-position change
+    const y = item.transform ? item.transform[5] : null;
+    if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) {
+      if (currentLine.trim()) lines.push(currentLine.trim());
+      currentLine = text;
+    } else {
+      // Same line — check if we need a space
+      if (currentLine && !currentLine.endsWith(" ") && !text.startsWith(" ")) {
+        currentLine += item.hasEOL ? "\n" : " ";
+      }
+      currentLine += text;
+    }
+    lastY = y;
+  }
+  if (currentLine.trim()) lines.push(currentLine.trim());
+
+  return lines.join("\n");
+}
+
+/**
+ * Render a PDF page to an image data URL (for image-based PDFs).
+ */
+async function renderPageToImage(page, scale = 1.5) {
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement("canvas");
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas.toDataURL("image/jpeg", 0.7);
+}
+
+/**
+ * Extract text from a PDF. If text extraction yields little content,
+ * renders the first page as an image for vision analysis.
  */
 async function readPdfFile(file) {
   try {
-    // Load pdf.js via script tag if not already loaded
-    if (!window.pdfjsLib) {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-        script.onload = resolve;
-        script.onerror = () => reject(new Error("Failed to load pdf.js"));
-        document.head.appendChild(script);
-      });
-      if (window.pdfjsLib) {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-      }
-    }
-
-    if (!window.pdfjsLib) throw new Error("pdf.js not available");
+    const pdfjsLib = await loadPdfJs();
 
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(arrayBuffer),
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    });
+    const pdf = await loadingTask.promise;
+
     const pages = [];
     const maxPages = Math.min(pdf.numPages, 20);
+    let totalChars = 0;
 
     for (let i = 1; i <= maxPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      const text = content.items.map((item) => item.str).join(" ");
-      pages.push(`[Page ${i}]\n${text}`);
+      const text = extractPageText(content);
+      totalChars += text.length;
+      pages.push({ num: i, text, page });
     }
 
-    let result = pages.join("\n\n");
+    // If very little text extracted, this is likely an image-based PDF
+    // Render first page as image for vision pipeline
+    if (totalChars < 50) {
+      const firstPage = await pdf.getPage(1);
+      const imageDataUrl = await renderPageToImage(firstPage);
+      if (imageDataUrl) {
+        return {
+          text: null,
+          image: imageDataUrl,
+          isImagePdf: true,
+        };
+      }
+      return { text: "[This PDF appears to be image-based. Text extraction found no content.]" };
+    }
+
+    let result = pages
+      .map((p) => `[Page ${p.num}]\n${p.text}`)
+      .join("\n\n");
+
     if (result.length > MAX_FILE_CHARS) {
       result = result.slice(0, MAX_FILE_CHARS) + "\n\n... (truncated)";
     }
     if (pdf.numPages > maxPages) {
       result += `\n\n(Showing ${maxPages} of ${pdf.numPages} pages)`;
     }
-    return result;
+    return { text: result };
   } catch (err) {
     console.error("PDF extraction failed:", err);
-    // Fallback: read as raw text (may contain some readable content)
+    // Fallback: try raw text extraction
     try {
-      const text = await file.text();
-      const cleaned = text.replace(/[^\x20-\x7E\n\r\t]/g, " ").replace(/\s{3,}/g, " ").trim();
+      const rawText = await file.text();
+      const cleaned = rawText.replace(/[^\x20-\x7E\n\r\t\u00A0-\uFFFF]/g, " ").replace(/\s{3,}/g, " ").trim();
       if (cleaned.length > 100) {
-        return cleaned.slice(0, MAX_FILE_CHARS) + "\n\n(Raw extraction - PDF parsing failed)";
+        return { text: cleaned.slice(0, MAX_FILE_CHARS) + "\n\n(Raw extraction - PDF parser failed: " + err.message + ")" };
       }
     } catch {}
-    return "[PDF upload detected but text extraction failed. The PDF may be image-based or encrypted.]";
+    return { text: `[PDF text extraction failed: ${err.message}. The PDF may require a different viewer.]` };
   }
 }
 
@@ -251,8 +332,12 @@ export async function processUploadedFile(file) {
   }
 
   if (isPdfFile(file)) {
-    const text = await readPdfFile(file);
-    return { text: text || "[Failed to extract PDF content]", fileName, fileType: "pdf" };
+    const result = await readPdfFile(file);
+    if (result.image) {
+      // Image-based PDF: send first page as image to vision pipeline
+      return { image: result.image, fileName, fileType: "pdf-image" };
+    }
+    return { text: result.text || "[Failed to extract PDF content]", fileName, fileType: "pdf" };
   }
 
   if (isTextFile(file)) {
