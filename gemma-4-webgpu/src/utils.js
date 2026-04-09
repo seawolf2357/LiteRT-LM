@@ -397,50 +397,160 @@ export function computeAudioBars(data, numBars) {
 /**
  * Generate a unique message ID.
  */
-/**
- * Web search via DuckDuckGo HTML (through allorigins CORS proxy).
- * No API key required. Works in all browser environments including iframes.
- */
-async function duckDuckGoSearch(query) {
-  const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(ddgUrl)}`;
+/** HTML entity decode */
+function decodeEntities(text) {
+  return text
+    .replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#x27;/g, "'")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n));
+}
 
-  const res = await fetch(proxyUrl);
-  if (!res.ok) throw new Error(`DuckDuckGo search proxy error: ${res.status}`);
+/** Strip HTML tags */
+function stripTags(html) {
+  return html.replace(/<[^>]+>/g, "");
+}
 
-  const html = await res.text();
-
-  // Parse search results from DDG HTML
+/** Parse DDG HTML search results page */
+function parseDdgHtml(html) {
+  // Try standard DDG HTML format
   const resultPattern = /class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/span>/g;
   const results = [];
   let match;
   while ((match = resultPattern.exec(html)) !== null && results.length < 5) {
     const rawUrl = match[1];
-    const title = match[2].replace(/<[^>]+>/g, "").trim();
-    const snippet = match[3].replace(/<[^>]+>/g, "").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#x27;/g, "'").trim();
-
-    // Extract real URL from DDG redirect
+    const title = decodeEntities(stripTags(match[2]).trim());
+    const snippet = decodeEntities(stripTags(match[3]).trim());
     const urlMatch = rawUrl.match(/uddg=([^&]+)/);
     const url = urlMatch ? decodeURIComponent(urlMatch[1]) : rawUrl;
+    if (title) results.push({ title, snippet, url });
+  }
+  if (results.length > 0) return results;
 
-    if (title && snippet) {
-      results.push({ title, snippet, url });
+  // Try DDG Lite format
+  const liteLinks = [...html.matchAll(/<a[^>]*rel="nofollow"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g)];
+  const liteSnippets = [...html.matchAll(/<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/g)];
+  for (let i = 0; i < Math.min(5, liteLinks.length); i++) {
+    const title = decodeEntities(stripTags(liteLinks[i][2]).trim());
+    const snippet = i < liteSnippets.length ? decodeEntities(stripTags(liteSnippets[i][1]).trim()) : "";
+    const url = liteLinks[i][1];
+    if (title) results.push({ title, snippet, url });
+  }
+  return results;
+}
+
+/** Fetch with timeout */
+function fetchWithTimeout(url, ms = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+/** CORS proxy URLs to try in order */
+const CORS_PROXIES = [
+  (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+  (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+];
+
+/**
+ * Web search via DuckDuckGo HTML through CORS proxies (with fallback chain).
+ * No API key required.
+ */
+async function duckDuckGoHtmlSearch(query) {
+  const ddgUrls = [
+    `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+    `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
+  ];
+
+  for (const ddgUrl of ddgUrls) {
+    for (const proxyFn of CORS_PROXIES) {
+      try {
+        const proxyUrl = proxyFn(ddgUrl);
+        const res = await fetchWithTimeout(proxyUrl, 8000);
+        if (!res.ok) continue;
+        const html = await res.text();
+        if (html.length < 200 || html.includes("error code:")) continue;
+        const results = parseDdgHtml(html);
+        if (results.length > 0) return results;
+      } catch {
+        continue;
+      }
     }
   }
-
-  if (results.length === 0) return "No search results found for: " + query;
-
-  return results
-    .map((r, i) => `${i + 1}. ${r.title}\n   ${r.snippet}\n   ${r.url}`)
-    .join("\n\n");
+  return null;
 }
 
 /**
- * Perform a web search. Uses DuckDuckGo (free, no CORS issues).
- * Brave Search API is kept as an optional alternative for future use.
+ * DuckDuckGo Instant Answer API (has CORS, no key needed).
+ * Good for factual/knowledge queries, not great for news.
+ */
+async function duckDuckGoInstantSearch(query) {
+  try {
+    const res = await fetchWithTimeout(
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+      5000,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const results = [];
+
+    if (data.AbstractText) {
+      results.push({
+        title: data.Heading || query,
+        snippet: data.AbstractText.slice(0, 200),
+        url: data.AbstractURL || "",
+      });
+    }
+
+    for (const topic of (data.RelatedTopics || [])) {
+      if (results.length >= 5) break;
+      if (topic.Text) {
+        results.push({
+          title: topic.Text.split(" - ")[0]?.slice(0, 60) || "",
+          snippet: topic.Text.slice(0, 150),
+          url: topic.FirstURL || "",
+        });
+      } else if (topic.Topics) {
+        for (const sub of topic.Topics) {
+          if (results.length >= 5) break;
+          if (sub.Text) {
+            results.push({
+              title: sub.Text.split(" - ")[0]?.slice(0, 60) || "",
+              snippet: sub.Text.slice(0, 150),
+              url: sub.FirstURL || "",
+            });
+          }
+        }
+      }
+    }
+    return results.length > 0 ? results : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Perform a web search using multiple sources with fallback.
+ * 1. DDG HTML via CORS proxy (best results)
+ * 2. DDG Instant Answer API (CORS native, limited but reliable)
  */
 export async function webSearch(query) {
-  return duckDuckGoSearch(query);
+  // Try HTML search first (full web results)
+  const htmlResults = await duckDuckGoHtmlSearch(query);
+  if (htmlResults && htmlResults.length > 0) {
+    return htmlResults
+      .map((r, i) => `${i + 1}. ${r.title}\n   ${r.snippet}\n   ${r.url}`)
+      .join("\n\n");
+  }
+
+  // Fallback: DDG Instant Answer API
+  const instantResults = await duckDuckGoInstantSearch(query);
+  if (instantResults && instantResults.length > 0) {
+    return instantResults
+      .map((r, i) => `${i + 1}. ${r.title}\n   ${r.snippet}\n   ${r.url}`)
+      .join("\n\n");
+  }
+
+  throw new Error("All search methods failed. Try rephrasing your query.");
 }
 
 export function generateId() {
