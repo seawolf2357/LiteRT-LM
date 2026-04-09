@@ -2350,7 +2350,7 @@ async function loadGallery() {
 
             let thumbHtml = '<div class="placeholder">&#x1F4D6;</div>';
             if (s.thumbnail) {
-                thumbHtml = '<img src="' + s.thumbnail + '" alt="thumb" onerror="this.parentElement.innerHTML=\'<div class=placeholder>&#x1F4D6;</div>\'" />';
+                thumbHtml = '<img src="' + s.thumbnail + '" alt="thumb" onerror="this.style.display=&quot;none&quot;" />';
             }
 
             card.innerHTML = '<div class="card-thumb">' + thumbHtml + '</div>' +
@@ -2359,8 +2359,8 @@ async function loadGallery() {
                 '<div class="card-meta">' + s.style + ' \u00B7 ' + s.mood + ' \u00B7 ' + (s.child_name || '') + ' (' + (s.child_age || '?') + ')</div>' +
                 '<span class="card-status ' + statusClass + '">' + s.status + '</span>' +
                 '<div class="card-actions">' +
-                '<button class="btn-view" onclick="event.stopPropagation();loadStoryFlipbook(\'' + s.id + '\');toggleGallery();">View</button>' +
-                (s.has_pdf ? '<button class="btn-download" onclick="event.stopPropagation();window.open(\'/api/story/' + s.id + '/pdf\',\'_blank\');">PDF</button>' : '') +
+                '<button class="btn-view" onclick="event.stopPropagation();loadStoryFlipbook(&quot;' + s.id + '&quot;);toggleGallery();">View</button>' +
+                (s.has_pdf ? '<button class="btn-download" onclick="event.stopPropagation();window.open(&quot;/api/story/' + s.id + '/pdf&quot;,&quot;_blank&quot;);">PDF</button>' : '') +
                 '</div></div>';
             body.appendChild(card);
         });
