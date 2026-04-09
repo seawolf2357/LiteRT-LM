@@ -92,8 +92,14 @@ export default function ChatOverlay({
           finalImage = pendingFile.image;
           if (!finalText) finalText = `Analyze this image: ${pendingFile.fileName}`;
         } else if (pendingFile.text) {
-          const prefix = `[File: ${pendingFile.fileName}]\n\`\`\`\n${pendingFile.text}\n\`\`\`\n\n`;
-          finalText = prefix + (finalText || `Analyze and summarize this file.`);
+          // Truncate file content to fit model context (keep first ~3000 chars)
+          const maxChars = 3000;
+          let fileContent = pendingFile.text;
+          if (fileContent.length > maxChars) {
+            fileContent = fileContent.slice(0, maxChars) + "\n... (truncated)";
+          }
+          const userQuestion = finalText || "Analyze and summarize this file.";
+          finalText = `[File: ${pendingFile.fileName}]\n\`\`\`\n${fileContent}\n\`\`\`\n\n${userQuestion}`;
         }
         setPendingFile(null);
       }

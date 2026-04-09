@@ -7,7 +7,6 @@ import {
   RawImage,
 } from "@huggingface/transformers";
 
-/** Read image from various sources (data URL, canvas, blob, etc.) */
 const readImage = RawImage.read.bind(RawImage);
 import {
   MODEL_ID,
@@ -25,6 +24,18 @@ export function useModel() {
   return ctx;
 }
 
+/** Keywords that suggest user wants a web search */
+const SEARCH_KEYWORDS = [
+  "검색", "search", "찾아", "look up", "google", "최근", "latest", "뉴스",
+  "news", "현재", "current", "today", "오늘", "실시간", "real-time", "how much",
+  "가격", "price", "날씨", "weather", "환율", "exchange rate", "주가", "stock",
+];
+
+function looksLikeSearchQuery(text) {
+  const lower = text.toLowerCase();
+  return SEARCH_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
 export function ModelProvider({ children }) {
   const [loadState, setLoadState] = useState("idle");
   const [loadProgress, setLoadProgress] = useState(0);
@@ -33,7 +44,6 @@ export function ModelProvider({ children }) {
   const loadPromiseRef = useRef(null);
   const stoppingCriteria = useRef(new InterruptableStoppingCriteria());
 
-  // Brave Search API key (stored in localStorage)
   const [braveApiKey, setBraveApiKey] = useState(
     () => localStorage.getItem("vidraft_brave_api_key") || "",
   );
@@ -44,7 +54,6 @@ export function ModelProvider({ children }) {
     else localStorage.removeItem("vidraft_brave_api_key");
   }, []);
 
-  /** Get active tools based on available API keys */
   const getActiveTools = useCallback(() => {
     return braveApiKey ? [...TOOLS, SEARCH_TOOL] : TOOLS;
   }, [braveApiKey]);
@@ -68,9 +77,7 @@ export function ModelProvider({ children }) {
             },
             device: "webgpu",
             progress_callback: (event) => {
-              if (event.status === "progress_total") {
-                setLoadProgress(event.progress);
-              }
+              if (event.status === "progress_total") setLoadProgress(event.progress);
             },
           }),
         ]);
@@ -92,7 +99,7 @@ export function ModelProvider({ children }) {
   }, [loadState]);
 
   /**
-   * Run a single generation pass with streaming support.
+   * Core generation with streaming.
    */
   const runGeneration = useCallback(async (messages, onToken, options) => {
     const processor = processorRef.current;
@@ -132,10 +139,7 @@ export function ModelProvider({ children }) {
           }
           if (buffer.length > 12 || !"<|channel>thought".startsWith(buffer)) {
             const cleaned = buffer.replace(SPECIAL_TOKEN_REGEX, "");
-            if (cleaned) {
-              fullText += cleaned;
-              onToken(cleaned, "content");
-            }
+            if (cleaned) { fullText += cleaned; onToken(cleaned, "content"); }
             buffer = "";
             phase = "content";
             return;
@@ -148,10 +152,7 @@ export function ModelProvider({ children }) {
             const thinkPart = buffer.split("<channel|>")[0];
             if (thinkPart) onToken(thinkPart, "thinking");
             const contentPart = (buffer.split("<channel|>").pop() ?? "").replace(SPECIAL_TOKEN_REGEX, "");
-            if (contentPart) {
-              fullText += contentPart;
-              onToken(contentPart, "content");
-            }
+            if (contentPart) { fullText += contentPart; onToken(contentPart, "content"); }
             buffer = "";
             phase = "content";
             return;
@@ -162,10 +163,7 @@ export function ModelProvider({ children }) {
         }
 
         const cleaned = token.replace(SPECIAL_TOKEN_REGEX, "");
-        if (cleaned) {
-          fullText += cleaned;
-          onToken(cleaned, "content");
-        }
+        if (cleaned) { fullText += cleaned; onToken(cleaned, "content"); }
         buffer = "";
       },
     });
@@ -182,10 +180,7 @@ export function ModelProvider({ children }) {
 
     if (buffer) {
       const cleaned = buffer.replace(SPECIAL_TOKEN_REGEX, "");
-      if (cleaned) {
-        fullText += cleaned;
-        onToken(cleaned, phase === "thinking" ? "thinking" : "content");
-      }
+      if (cleaned) { fullText += cleaned; onToken(cleaned, phase === "thinking" ? "thinking" : "content"); }
     }
 
     const rawOutput = processor.batch_decode(
@@ -196,9 +191,6 @@ export function ModelProvider({ children }) {
     return { text: fullText, rawOutput };
   }, []);
 
-  /**
-   * Transcribe audio.
-   */
   const transcribeAudio = useCallback(async (audioData) => {
     const processor = processorRef.current;
     const model = modelRef.current;
@@ -212,16 +204,12 @@ export function ModelProvider({ children }) {
         ],
         { add_generation_prompt: true },
       ),
-      null,
-      audioData,
-      { add_special_tokens: false },
+      null, audioData, { add_special_tokens: false },
     );
 
     stoppingCriteria.current.reset();
     const output = await model.generate({
-      ...inputs,
-      max_new_tokens: 512,
-      do_sample: false,
+      ...inputs, max_new_tokens: 512, do_sample: false,
       stopping_criteria: [stoppingCriteria.current],
     });
 
@@ -230,9 +218,6 @@ export function ModelProvider({ children }) {
       .trim();
   }, []);
 
-  /**
-   * Handle a direct image message.
-   */
   const generateWithImage = useCallback(
     async (messages, lastMessage, onToken, enableThinking) => {
       const canvas = await decodeImage(lastMessage.image);
@@ -247,8 +232,7 @@ export function ModelProvider({ children }) {
   );
 
   /**
-   * Analyze a single frame for detection mode (non-streaming, short response).
-   * Returns { detected: boolean, description: string }
+   * Analyze a single frame for detection mode.
    */
   const analyzeFrame = useCallback(async (imageDataUrl, condition) => {
     const processor = processorRef.current;
@@ -259,27 +243,26 @@ export function ModelProvider({ children }) {
     if (!canvas) return { detected: false, description: "Failed to decode frame" };
 
     const prompt =
-      `Analyze this image for the following condition: "${condition}"\n` +
-      `Respond with ONLY a JSON object: {"detected": true or false, "description": "brief explanation"}\n` +
-      `Do not include any other text.`;
+      `You are a precise visual detection system. Your task is to determine if a SPECIFIC condition is met in this image.\n\n` +
+      `CONDITION TO CHECK: "${condition}"\n\n` +
+      `RULES:\n` +
+      `- Only respond "detected": true if the condition is CLEARLY and UNAMBIGUOUSLY visible\n` +
+      `- If you are unsure, respond "detected": false\n` +
+      `- Do NOT guess or assume things that are not clearly visible\n` +
+      `- Be strict: partial matches count as false\n\n` +
+      `Respond with ONLY this JSON: {"detected": true or false, "description": "what you actually see"}`;
 
     const inputs = await processor(
       processor.apply_chat_template(
         [{ role: "user", content: [{ type: "image" }, { type: "text", text: prompt }] }],
         { add_generation_prompt: true },
       ),
-      await readImage(canvas),
-      null,
-      { add_special_tokens: false },
+      await readImage(canvas), null, { add_special_tokens: false },
     );
 
-    // Use a fresh stopping criteria for each detection call
-    // to avoid interference from chat's stopGeneration()
     const detectionCriteria = new InterruptableStoppingCriteria();
     const output = await model.generate({
-      ...inputs,
-      max_new_tokens: 256,
-      do_sample: false,
+      ...inputs, max_new_tokens: 200, do_sample: false,
       stopping_criteria: [detectionCriteria],
     });
 
@@ -287,25 +270,24 @@ export function ModelProvider({ children }) {
       .batch_decode(output.slice(null, [inputs.input_ids.dims.at(-1), null]), { skip_special_tokens: true })[0]
       .trim();
 
+    // Strict JSON parsing only - no heuristic fallback
     try {
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      const jsonMatch = rawText.match(/\{[^}]*"detected"\s*:\s*(true|false)[^}]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         return {
-          detected: !!parsed.detected,
+          detected: parsed.detected === true,
           description: parsed.description || rawText,
         };
       }
     } catch {}
 
-    // Fallback: heuristic detection from text
-    const lower = rawText.toLowerCase();
-    const detected = lower.includes('"detected": true') || lower.includes('"detected":true');
-    return { detected, description: rawText };
+    // If JSON parsing fails entirely, default to NOT detected (conservative)
+    return { detected: false, description: rawText };
   }, []);
 
   /**
-   * High-level generate function that handles text, image, audio, tool calling, and search.
+   * High-level generate: text, image, audio, file, search, tool calling.
    */
   const generate = useCallback(
     async (messages, onToken, options) => {
@@ -318,7 +300,7 @@ export function ModelProvider({ children }) {
 
       const lastMessage = messages[messages.length - 1];
 
-      // Direct image message
+      // Direct image message (from camera capture or image upload)
       if (lastMessage?.image) {
         const { text } = await generateWithImage(messages, lastMessage, onToken, enableThinking);
         return text;
@@ -335,7 +317,46 @@ export function ModelProvider({ children }) {
         );
       }
 
-      // Text message with tool calling
+      // Check if this is a file-context message (contains ``` code block from file upload)
+      // For file messages: skip tool calling, send directly for analysis
+      const hasFileContent = lastMessage?.content?.includes("[File:") && lastMessage?.content?.includes("```");
+      if (hasFileContent) {
+        const fileMessages = [
+          { role: "system", content: "You are VIDRAFT AI. The user has uploaded a file. Analyze the file content provided and answer their question. Be thorough and helpful." },
+          ...messages.map((m) => ({ role: m.role, content: m.content })),
+        ];
+        const { text } = await runGeneration(fileMessages, onToken, {
+          enableThinking,
+          maxNewTokens: 2048,
+        });
+        return text;
+      }
+
+      // Auto web search: if API key exists and query looks like a search
+      if (braveApiKey && looksLikeSearchQuery(lastMessage?.content || "")) {
+        try {
+          const searchResults = await braveSearch(lastMessage.content, braveApiKey);
+          // Inject search results into the message for the model
+          const enrichedMessages = [
+            { role: "system", content: "You are VIDRAFT AI. Use the web search results below to answer the user's question accurately. Cite sources when relevant." },
+            ...messages.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
+            {
+              role: "user",
+              content: `${lastMessage.content}\n\n[Web Search Results]\n${searchResults}`,
+            },
+          ];
+          const { text } = await runGeneration(enrichedMessages, onToken, {
+            enableThinking,
+            maxNewTokens: 2048,
+          });
+          return text;
+        } catch (err) {
+          console.error("Auto search failed:", err);
+          // Fall through to normal generation
+        }
+      }
+
+      // Normal text message with tool calling (for vision tool)
       const activeTools = getActiveTools();
       const chatMessages = buildChatMessages(messages);
       const { text, rawOutput } = await runGeneration(chatMessages, onToken, {
@@ -347,11 +368,10 @@ export function ModelProvider({ children }) {
       const toolCalls = parseToolCalls(rawOutput);
       if (toolCalls.length === 0) return text;
 
-      // Handle tool calls
+      // Handle vision tool call
       onToolCall?.();
       const toolResponseMap = {};
 
-      // Handle vision tool
       const visionCall = toolCalls.find((c) => c.function.name === "vision");
       if (visionCall) {
         let response = "Could not capture frame.";
@@ -372,19 +392,14 @@ export function ModelProvider({ children }) {
         toolResponseMap.vision = response;
       }
 
-      // Handle search tool
+      // Handle search tool call (fallback if model explicitly calls it)
       const searchCall = toolCalls.find((c) => c.function.name === "web_search");
       if (searchCall && braveApiKey) {
-        const query = searchCall.function.arguments.query || "";
-        if (query) {
-          try {
-            const searchResults = await braveSearch(query, braveApiKey);
-            toolResponseMap.web_search = searchResults;
-          } catch (err) {
-            toolResponseMap.web_search = `Search failed: ${err.message}`;
-          }
-        } else {
-          toolResponseMap.web_search = "No search query provided.";
+        const query = searchCall.function.arguments.query || lastMessage?.content || "";
+        try {
+          toolResponseMap.web_search = await braveSearch(query, braveApiKey);
+        } catch (err) {
+          toolResponseMap.web_search = `Search failed: ${err.message}`;
         }
       }
 
@@ -394,11 +409,7 @@ export function ModelProvider({ children }) {
       }));
 
       const { text: finalText } = await runGeneration(
-        [
-          ...chatMessages,
-          { role: "assistant", tool_calls: toolCalls },
-          { role: "user", tool_responses: toolResponses },
-        ],
+        [...chatMessages, { role: "assistant", tool_calls: toolCalls }, { role: "user", tool_responses: toolResponses }],
         onToken,
         { enableThinking, tools: true, customTools: activeTools },
       );
@@ -415,14 +426,8 @@ export function ModelProvider({ children }) {
   return (
     <ModelContext.Provider
       value={{
-        loadState,
-        loadProgress,
-        loadModel,
-        generate,
-        analyzeFrame,
-        stopGeneration,
-        braveApiKey,
-        updateBraveApiKey,
+        loadState, loadProgress, loadModel, generate, analyzeFrame, stopGeneration,
+        braveApiKey, updateBraveApiKey,
       }}
     >
       {children}
