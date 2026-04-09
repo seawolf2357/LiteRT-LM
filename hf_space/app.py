@@ -2203,28 +2203,22 @@ function renderPageFromB64(b64) {
     const overlay = document.getElementById('loading-overlay');
     overlay.style.display = 'none';
     if (!b64) return;
-    const img = new Image();
-    img.onload = function() {
-        const container = document.getElementById('viewer');
-        const maxW = container.clientWidth * 0.85;
-        const maxH = container.clientHeight * 0.85;
-        let w = img.width, h = img.height;
-        const scale = Math.min(maxW / w, maxH / h, 1.5);
-        w = Math.floor(w * scale);
-        h = Math.floor(h * scale);
-        canvas.width = w;
-        canvas.height = h;
-        ctx.clearRect(0, 0, w, h);
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 20;
-        ctx.shadowOffsetX = 5;
-        ctx.shadowOffsetY = 5;
-        ctx.drawImage(img, 0, 0, w, h);
-        ctx.shadowColor = 'transparent';
-    };
-    img.src = 'data:image/jpeg;base64,' + b64;
+    // Use simple img tag instead of canvas for reliability
+    const viewer = document.getElementById('viewer');
+    let imgEl = document.getElementById('page-img');
+    if (!imgEl) {
+        imgEl = document.createElement('img');
+        imgEl.id = 'page-img';
+        imgEl.style.cssText = 'max-width:90%;max-height:85%;object-fit:contain;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.6);';
+        // Insert before controls
+        const canvas = document.getElementById('flipbook-canvas');
+        if (canvas) canvas.style.display = 'none';
+        viewer.insertBefore(imgEl, viewer.querySelector('.viewer-controls'));
+    }
+    imgEl.src = 'data:image/jpeg;base64,' + b64;
+    const maxPages = flipPages.length > 0 ? flipPages.length : totalPdfPages;
     document.getElementById('page-indicator').textContent =
-        'Page ' + (currentPageIdx + 1) + ' / ' + totalPdfPages;
+        'Page ' + (currentPageIdx + 1) + ' / ' + maxPages;
 }
 
 // ===== INIT PDF SWITCH BUTTONS =====
