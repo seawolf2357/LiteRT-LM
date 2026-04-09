@@ -1,10 +1,12 @@
-import Markdown from "react-markdown";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
+import Markdown from "streamdown";
+import { katex as katexPlugin } from "streamdown/plugins/katex";
 import "katex/dist/katex.min.css";
 import { preprocessMath } from "../utils";
 import ThinkingToggle from "./ThinkingToggle";
 import AudioWaveform from "./AudioWaveform";
+
+/** KaTeX math plugin configured with single dollar sign support */
+const mathPlugin = katexPlugin({ singleDollarTextMath: true });
 
 export default function MessageBubble({ message }) {
   const isUser = message.role === "user";
@@ -43,8 +45,9 @@ export default function MessageBubble({ message }) {
               <span className="whitespace-pre-wrap">{message.content}</span>
             ) : (
               <Markdown
-                remarkPlugins={[[remarkMath, { singleDollarTextMath: true }]]}
-                rehypePlugins={[rehypeKatex]}
+                plugins={{ math: mathPlugin }}
+                parseIncompleteMarkdown={false}
+                isAnimating={!!message.isStreaming}
               >
                 {preprocessMath(message.content)}
               </Markdown>

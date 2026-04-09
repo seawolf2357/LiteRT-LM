@@ -6,6 +6,9 @@ import {
   InterruptableStoppingCriteria,
   RawImage,
 } from "@huggingface/transformers";
+
+/** Read image from various sources (data URL, canvas, blob, etc.) */
+const readImage = RawImage.read.bind(RawImage);
 import {
   MODEL_ID,
   TOOLS,
@@ -86,7 +89,7 @@ export function ModelProvider({ children }) {
         ...(options.tools && { tools: TOOLS }),
         ...(options.enableThinking && { enable_thinking: true }),
       }),
-      options.image ? await RawImage(options.image) : null,
+      options.image ? await readImage(options.image) : null,
       options.audio ?? null,
       { add_special_tokens: false },
     );
