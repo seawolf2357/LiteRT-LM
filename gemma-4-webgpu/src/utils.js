@@ -530,11 +530,25 @@ async function duckDuckGoInstantSearch(query) {
 
 /**
  * Perform a web search using multiple sources with fallback.
- * 1. DDG HTML via CORS proxy (best results)
- * 2. DDG Instant Answer API (CORS native, limited but reliable)
+ * 1. Server-side proxy /api/search (Docker-based HF Spaces — guaranteed)
+ * 2. DDG HTML via CORS proxies (browser fallback)
+ * 3. DDG Instant Answer API (always available, limited)
  */
 export async function webSearch(query) {
-  // Try HTML search first (full web results)
+  // 1. Server-side proxy (same origin, no CORS issues)
+  try {
+    const res = await fetchWithTimeout(`/api/search?q=${encodeURIComponent(query)}`, 10000);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        return data.results
+          .map((r, i) => `${i + 1}. ${r.title}\n   ${r.snippet}\n   ${r.url}`)
+          .join("\n\n");
+      }
+    }
+  } catch {}
+
+  // 2. DDG HTML via CORS proxies
   const htmlResults = await duckDuckGoHtmlSearch(query);
   if (htmlResults && htmlResults.length > 0) {
     return htmlResults
@@ -542,7 +556,7 @@ export async function webSearch(query) {
       .join("\n\n");
   }
 
-  // Fallback: DDG Instant Answer API
+  // 3. DDG Instant Answer API
   const instantResults = await duckDuckGoInstantSearch(query);
   if (instantResults && instantResults.length > 0) {
     return instantResults

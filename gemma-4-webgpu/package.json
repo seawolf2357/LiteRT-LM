@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "serve": "node server.js"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.0.1",
+    "express": "^5.1.0",
     "katex": "^0.16.44",
     "lucide-react": "^0.511.0",
     "react": "^19.2.4",
