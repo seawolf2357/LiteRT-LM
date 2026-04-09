@@ -1178,11 +1178,42 @@ async def list_pdfs():
 
 @app.get("/api/pdf/{pdf_key}/pages")
 async def get_pdf_pages(pdf_key: str):
-    """Get base64 page images for a built-in PDF."""
-    pages = get_cached_pdf_pages(pdf_key)
-    if not pages:
+    """Get total page count for a built-in PDF (no heavy base64 payload)."""
+    local_path = ensure_pdf_downloaded(pdf_key)
+    if not local_path or fitz is None:
         raise HTTPException(404, "PDF not found or could not be processed")
-    return JSONResponse({"pdf_key": pdf_key, "total_pages": len(pages), "pages": pages})
+    try:
+        doc = fitz.open(local_path)
+        total = doc.page_count
+        doc.close()
+        return JSONResponse({"pdf_key": pdf_key, "total_pages": total})
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/pdf/{pdf_key}/page/{page_idx}")
+async def get_pdf_single_page(pdf_key: str, page_idx: int):
+    """Get a single PDF page as base64 image (lazy loading)."""
+    local_path = ensure_pdf_downloaded(pdf_key)
+    if not local_path or fitz is None:
+        raise HTTPException(404, "PDF not found")
+    try:
+        doc = fitz.open(local_path)
+        if page_idx < 0 or page_idx >= doc.page_count:
+            doc.close()
+            raise HTTPException(404, "Page index out of range")
+        page = doc.load_page(page_idx)
+        mat = fitz.Matrix(150 / 72, 150 / 72)
+        pix = page.get_pixmap(matrix=mat)
+        img_bytes = pix.tobytes("jpeg", 85)
+        b64 = base64.b64encode(img_bytes).decode("utf-8")
+        total = doc.page_count
+        doc.close()
+        return JSONResponse({"pdf_key": pdf_key, "page_idx": page_idx, "total_pages": total, "image": b64})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 
 @app.post("/api/pdf/{pdf_key}/analyze")
@@ -1909,7 +1940,7 @@ h1, h2, h3, h4, h5 { font-family: 'Bangers', 'Comic Neue', cursive; letter-spaci
         <div class="subtitle">3D FlipBook PDF Viewer + AI Story Generator</div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
-        <span style="font-size:0.8rem;color:rgba(255,255,255,0.6);">Powered by Kimi-K2.5 + Grok Imagine</span>
+        <span style="font-size:0.8rem;color:rgba(255,255,255,0.6);"></span>
     </div>
 </div>
 
@@ -2053,10 +2084,97 @@ const canvas = document.getElementById('flipbook-canvas');
 const ctx = canvas.getContext('2d');
 
 function renderPage() {
-    if (flipPages.length === 0) return;
+    // For story flipbook pages (loaded all at once)
+    if (flipPages.length > 0) {
+        renderPageFromB64(flipPages[currentPageIdx]);
+        return;
+    }
+    // For lazy-loaded built-in PDFs
+    if (totalPdfPages > 0) {
+        loadAndRenderPage(currentPageIdx);
+    }
+}
+
+function flipPrev() {
+    if (currentPageIdx > 0) {
+        currentPageIdx--;
+        if (flipPages.length > 0) renderPage();
+        else loadAndRenderPage(currentPageIdx);
+    }
+}
+function flipNext() {
+    const maxPages = flipPages.length > 0 ? flipPages.length : totalPdfPages;
+    if (currentPageIdx < maxPages - 1) {
+        currentPageIdx++;
+        if (flipPages.length > 0) renderPage();
+        else loadAndRenderPage(currentPageIdx);
+    }
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowLeft') flipPrev();
+    if (e.key === 'ArrowRight') flipNext();
+});
+
+// ===== LOAD BUILT-IN PDF (lazy, one page at a time) =====
+let totalPdfPages = 0;
+let pageCache = {};
+
+async function loadPdf(key) {
+    currentPdfKey = key;
+    currentPageIdx = 0;
+    flipPages = [];
+    pageCache = {};
+    totalPdfPages = 0;
+    document.getElementById('loading-overlay').style.display = 'flex';
+    document.getElementById('loading-overlay').querySelector('p').textContent = 'Loading PDF...';
+    document.querySelectorAll('.pdf-switch-btns button').forEach(b => {
+        b.classList.toggle('active', b.dataset.key === key);
+    });
+    try {
+        const resp = await fetch('/api/pdf/' + key + '/pages');
+        const data = await resp.json();
+        totalPdfPages = data.total_pages || 0;
+        if (totalPdfPages === 0) {
+            document.getElementById('loading-overlay').querySelector('p').textContent = 'No pages found';
+            return;
+        }
+        await loadAndRenderPage(0);
+    } catch(e) {
+        console.error('Failed to load PDF:', e);
+        document.getElementById('loading-overlay').querySelector('p').textContent = 'Failed to load PDF: ' + e.message;
+    }
+}
+
+async function loadAndRenderPage(idx) {
+    if (idx < 0 || idx >= totalPdfPages) return;
+    currentPageIdx = idx;
+    if (pageCache[idx]) {
+        renderPageFromB64(pageCache[idx]);
+        return;
+    }
+    document.getElementById('loading-overlay').style.display = 'flex';
+    document.getElementById('loading-overlay').querySelector('p').textContent = 'Loading page ' + (idx+1) + '/' + totalPdfPages + '...';
+    try {
+        const resp = await fetch('/api/pdf/' + currentPdfKey + '/page/' + idx);
+        const data = await resp.json();
+        pageCache[idx] = data.image;
+        renderPageFromB64(data.image);
+        // Preload next page
+        if (idx + 1 < totalPdfPages && !pageCache[idx+1]) {
+            fetch('/api/pdf/' + currentPdfKey + '/page/' + (idx+1))
+                .then(r => r.json()).then(d => { pageCache[idx+1] = d.image; });
+        }
+    } catch(e) {
+        console.error('Failed to load page:', e);
+        document.getElementById('loading-overlay').querySelector('p').textContent = 'Failed to load page';
+    }
+}
+
+function renderPageFromB64(b64) {
     const overlay = document.getElementById('loading-overlay');
     overlay.style.display = 'none';
-    const b64 = flipPages[currentPageIdx];
     if (!b64) return;
     const img = new Image();
     img.onload = function() {
@@ -2070,7 +2188,6 @@ function renderPage() {
         canvas.width = w;
         canvas.height = h;
         ctx.clearRect(0, 0, w, h);
-        // Shadow effect for book feel
         ctx.shadowColor = 'rgba(0,0,0,0.5)';
         ctx.shadowBlur = 20;
         ctx.shadowOffsetX = 5;
@@ -2078,45 +2195,9 @@ function renderPage() {
         ctx.drawImage(img, 0, 0, w, h);
         ctx.shadowColor = 'transparent';
     };
-    img.src = 'data:image/png;base64,' + b64;
+    img.src = 'data:image/jpeg;base64,' + b64;
     document.getElementById('page-indicator').textContent =
-        'Page ' + (currentPageIdx + 1) + ' / ' + flipPages.length;
-}
-
-function flipPrev() {
-    if (currentPageIdx > 0) { currentPageIdx--; renderPage(); }
-}
-function flipNext() {
-    if (currentPageIdx < flipPages.length - 1) { currentPageIdx++; renderPage(); }
-}
-
-// Keyboard navigation
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'ArrowLeft') flipPrev();
-    if (e.key === 'ArrowRight') flipNext();
-});
-
-// ===== LOAD BUILT-IN PDF =====
-async function loadPdf(key) {
-    currentPdfKey = key;
-    currentPageIdx = 0;
-    flipPages = [];
-    document.getElementById('loading-overlay').style.display = 'flex';
-    document.getElementById('loading-overlay').querySelector('p').textContent = 'Loading PDF...';
-    // Update switch buttons
-    document.querySelectorAll('.pdf-switch-btns button').forEach(b => {
-        b.classList.toggle('active', b.dataset.key === key);
-    });
-    try {
-        const resp = await fetch('/api/pdf/' + key + '/pages');
-        const data = await resp.json();
-        flipPages = data.pages || [];
-        currentPageIdx = 0;
-        renderPage();
-    } catch(e) {
-        console.error('Failed to load PDF:', e);
-        document.getElementById('loading-overlay').querySelector('p').textContent = 'Failed to load PDF';
-    }
+        'Page ' + (currentPageIdx + 1) + ' / ' + totalPdfPages;
 }
 
 // ===== INIT PDF SWITCH BUTTONS =====
@@ -2211,6 +2292,8 @@ async function pollStatus(storyId) {
 async function loadStoryFlipbook(storyId) {
     currentPageIdx = 0;
     flipPages = [];
+    totalPdfPages = 0;
+    pageCache = {};
     document.getElementById('loading-overlay').style.display = 'flex';
     document.getElementById('loading-overlay').querySelector('p').textContent = 'Loading Fairy Tale...';
     try {
