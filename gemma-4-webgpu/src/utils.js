@@ -398,51 +398,49 @@ export function computeAudioBars(data, numBars) {
  * Generate a unique message ID.
  */
 /**
- * Perform a web search using Brave Search API.
- * Tries direct request first, falls back to CORS proxy if blocked.
- * Returns formatted text with top results.
+ * Web search via DuckDuckGo HTML (through allorigins CORS proxy).
+ * No API key required. Works in all browser environments including iframes.
  */
-export async function braveSearch(query, apiKey) {
-  const baseUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
-  const headers = {
-    "X-Subscription-Token": apiKey,
-    "Accept": "application/json",
-  };
+async function duckDuckGoSearch(query) {
+  const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(ddgUrl)}`;
 
-  let res;
-  try {
-    // Try direct request first
-    res = await fetch(baseUrl, { headers });
-  } catch (directErr) {
-    // CORS blocked — try via proxy
-    console.warn("Brave Search direct failed, trying CORS proxy:", directErr.message);
-    try {
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(baseUrl)}`;
-      res = await fetch(proxyUrl, {
-        headers: { "X-Subscription-Token": apiKey },
-      });
-    } catch (proxyErr) {
-      throw new Error(`Search failed (CORS blocked). Try a different browser or disable extensions. ${directErr.message}`);
+  const res = await fetch(proxyUrl);
+  if (!res.ok) throw new Error(`DuckDuckGo search proxy error: ${res.status}`);
+
+  const html = await res.text();
+
+  // Parse search results from DDG HTML
+  const resultPattern = /class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/span>/g;
+  const results = [];
+  let match;
+  while ((match = resultPattern.exec(html)) !== null && results.length < 5) {
+    const rawUrl = match[1];
+    const title = match[2].replace(/<[^>]+>/g, "").trim();
+    const snippet = match[3].replace(/<[^>]+>/g, "").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#x27;/g, "'").trim();
+
+    // Extract real URL from DDG redirect
+    const urlMatch = rawUrl.match(/uddg=([^&]+)/);
+    const url = urlMatch ? decodeURIComponent(urlMatch[1]) : rawUrl;
+
+    if (title && snippet) {
+      results.push({ title, snippet, url });
     }
   }
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    if (res.status === 401 || res.status === 422) {
-      throw new Error("Invalid Brave API key. Check Settings.");
-    }
-    throw new Error(`Brave API error ${res.status}: ${errText.slice(0, 100)}`);
-  }
-
-  const data = await res.json();
-  const results = data.web?.results || [];
 
   if (results.length === 0) return "No search results found for: " + query;
 
   return results
-    .slice(0, 5)
-    .map((r, i) => `${i + 1}. ${r.title}\n   ${r.description || ""}\n   ${r.url}`)
+    .map((r, i) => `${i + 1}. ${r.title}\n   ${r.snippet}\n   ${r.url}`)
     .join("\n\n");
+}
+
+/**
+ * Perform a web search. Uses DuckDuckGo (free, no CORS issues).
+ * Brave Search API is kept as an optional alternative for future use.
+ */
+export async function webSearch(query) {
+  return duckDuckGoSearch(query);
 }
 
 export function generateId() {

@@ -14,7 +14,7 @@ import {
   SEARCH_TOOL,
   SPECIAL_TOKEN_REGEX,
 } from "../constants";
-import { parseToolCalls, buildChatMessages, decodeImage, braveSearch } from "../utils";
+import { parseToolCalls, buildChatMessages, decodeImage, webSearch } from "../utils";
 
 const ModelContext = createContext(null);
 
@@ -44,19 +44,8 @@ export function ModelProvider({ children }) {
   const loadPromiseRef = useRef(null);
   const stoppingCriteria = useRef(new InterruptableStoppingCriteria());
 
-  const [braveApiKey, setBraveApiKey] = useState(
-    () => localStorage.getItem("vidraft_brave_api_key") || "",
-  );
-
-  const updateBraveApiKey = useCallback((key) => {
-    setBraveApiKey(key);
-    if (key) localStorage.setItem("vidraft_brave_api_key", key);
-    else localStorage.removeItem("vidraft_brave_api_key");
-  }, []);
-
-  const getActiveTools = useCallback(() => {
-    return braveApiKey ? [...TOOLS, SEARCH_TOOL] : TOOLS;
-  }, [braveApiKey]);
+  /** All tools always active — search uses DuckDuckGo (no key needed) */
+  const getActiveTools = useCallback(() => [...TOOLS, SEARCH_TOOL], []);
 
   const loadModel = useCallback(async () => {
     if (loadState === "ready") return;
@@ -335,30 +324,25 @@ export function ModelProvider({ children }) {
         return text;
       }
 
-      // Auto web search: if API key exists and query looks like a search
-      if (braveApiKey && looksLikeSearchQuery(lastMessage?.content || "")) {
+      // Auto web search: if query looks like a search request
+      if (looksLikeSearchQuery(lastMessage?.content || "")) {
         let searchResults = null;
-        let searchError = null;
         try {
-          searchResults = await braveSearch(lastMessage.content, braveApiKey);
+          onToken("[Searching the web...]\n\n", "content");
+          searchResults = await webSearch(lastMessage.content);
         } catch (err) {
-          searchError = err.message;
           console.error("Web search failed:", err);
+          onToken(`[Search failed: ${err.message}]\n\n`, "content");
         }
 
         if (searchResults) {
           const enrichedMessages = [
-            { role: "system", content: "You are VIDRAFT AI. Use the web search results below to answer the user's question accurately and concisely. Cite sources when relevant." },
+            { role: "system", content: "You are VIDRAFT AI. Answer the user's question using the web search results below. Be accurate and cite sources." },
             ...messages.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
             { role: "user", content: `${lastMessage.content}\n\n[Web Search Results]\n${searchResults}` },
           ];
           const { text } = await runGeneration(enrichedMessages, onToken, { enableThinking, maxNewTokens: 2048 });
           return text;
-        }
-
-        if (searchError) {
-          // Show search error to user, then proceed with normal generation
-          onToken(`[Web search failed: ${searchError}]\n\n`, "content");
         }
       }
 
@@ -400,10 +384,10 @@ export function ModelProvider({ children }) {
 
       // Handle search tool call (fallback if model explicitly calls it)
       const searchCall = toolCalls.find((c) => c.function.name === "web_search");
-      if (searchCall && braveApiKey) {
+      if (searchCall) {
         const query = searchCall.function.arguments.query || lastMessage?.content || "";
         try {
-          toolResponseMap.web_search = await braveSearch(query, braveApiKey);
+          toolResponseMap.web_search = await webSearch(query);
         } catch (err) {
           toolResponseMap.web_search = `Search failed: ${err.message}`;
         }
@@ -422,7 +406,7 @@ export function ModelProvider({ children }) {
 
       return finalText;
     },
-    [runGeneration, transcribeAudio, generateWithImage, getActiveTools, braveApiKey],
+    [runGeneration, transcribeAudio, generateWithImage, getActiveTools],
   );
 
   const stopGeneration = useCallback(() => {
@@ -433,7 +417,6 @@ export function ModelProvider({ children }) {
     <ModelContext.Provider
       value={{
         loadState, loadProgress, loadModel, generate, analyzeFrame, stopGeneration,
-        braveApiKey, updateBraveApiKey,
       }}
     >
       {children}
