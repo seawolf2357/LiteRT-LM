@@ -1,13 +1,21 @@
 ---
-# LoRA stack to fuse into Z-Image Turbo for Darwin-Image-v1
+# LoRA stack to fuse into Z-Image Turbo for Darwin-Image-v1 (v2: rebalanced)
 #
-# All LoRAs share the same architecture (Z-Image Turbo DiT, dim=3840) and use
-# the ai-toolkit standard format (`diffusion_model.layers.N.X.lora_A/B.weight`,
-# 480 keys, 30 layers × attention/adaLN/feedforward modules). Direct matrix
-# fusion works without SVD projection or information loss.
+# All LoRAs share the ai-toolkit standard format (480 keys,
+# `diffusion_model.layers.N.X.lora_A/B.weight`, 30 DiT layers × 8 modules × 2).
+# Direct matrix fusion via `pipeline/manual_fuse.py` — W += (B@A)*(alpha/rank)*scale.
 #
-# `weight_name` is required because these repos use custom filenames, not the
-# default `pytorch_lora_weights.safetensors` that diffusers auto-loader expects.
+# v2 CHANGELOG (2026-04-10):
+#   - REMOVED `dejpeg` (wcde/Z-Image-Turbo-DeJPEG-Lora/dejpeg_v3)
+#     Reason: delta_norm 3.67 (26× other LoRAs) caused over-smoothing,
+#     destroying portrait/color detail. The LoRA's intended goal — JPEG
+#     artifact removal — is unnecessary for Z-Image Turbo (distilled model
+#     has no JPEG artifacts to remove by design).
+#   - REDUCED `color` scale 0.4 → 0.3
+#     Reason: prevent over-saturation on neon/night scenes.
+#
+# Final stack (3 LoRAs, combined delta_norm well within baseline):
+#   portrait 0.7 + nsfw 0.5 + color 0.3
 
 base_model: Tongyi-MAI/Z-Image-Turbo
 output_repo: FINAL-Bench/Darwin-Image-v1
@@ -28,14 +36,8 @@ loras:
   - repo_id: renderartist/Technically-Color-Z-Image-Turbo
     weight_name: Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors
     adapter_name: color
-    scale: 0.4
-    purpose: "Enhanced color/saturation palette"
-
-  - repo_id: wcde/Z-Image-Turbo-DeJPEG-Lora
-    weight_name: dejpeg_v3.safetensors
-    adapter_name: dejpeg
     scale: 0.3
-    purpose: "JPEG artifact removal / sharpness"
+    purpose: "Enhanced color/saturation palette (reduced from 0.4 to prevent over-saturation)"
 
 validation:
   test_prompts:

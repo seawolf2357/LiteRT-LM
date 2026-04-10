@@ -57,18 +57,27 @@ FINAL-Bench/Darwin-Image-v1/
 └── README.md  (this file)
 ```
 
-## LoRA Stack Fused Into DiT
+## LoRA Stack Fused Into DiT (v2, 2026-04-10)
 
 ```
 Z-Image Turbo (6B DiT, bf16)
     └── + Shakker-Labs/AWPortrait-Z (scale 0.7) → portrait quality
     └── + qqnyanddld/nsfw-z-image-lora (scale 0.5) → uncensored
-    └── + renderartist/Technically-Color-Z-Image-Turbo (scale 0.4) → color
-    └── + wcde/Z-Image-Turbo-DeJPEG-Lora (scale 0.3) → artifact removal
+    └── + renderartist/Technically-Color-Z-Image-Turbo (scale 0.3) → color
 ```
 
-All LoRAs share Z-Image's DiT architecture (dim=3840), so direct
-`fuse_lora()` works without SVD projection or information loss.
+All LoRAs use the ai-toolkit standard format (480 keys each,
+`diffusion_model.layers.N.X.lora_A/B.weight`). Fused via direct matrix
+update (`pipeline/manual_fuse.py`): `W += (B @ A) × (alpha/rank) × scale`.
+
+### v2 Changelog
+
+- **Removed** `wcde/Z-Image-Turbo-DeJPEG-Lora/dejpeg_v3` — caused over-smoothing
+  that destroyed portrait/color detail. delta_norm was 3.67 vs 0.14~0.41 for
+  other LoRAs (26× baseline). Z-Image Turbo is distilled and has minimal
+  JPEG artifacts to begin with, so dejpeg was unnecessary.
+- **Reduced** `Technically-Color-Z-Image-Turbo` scale 0.4 → 0.3 to prevent
+  over-saturation on high-contrast/neon scenes.
 
 ## Usage
 

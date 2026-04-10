@@ -35,6 +35,7 @@ TARGET_REPO = "FINAL-Bench/Darwin-Image-v1"
 
 # The manifest is shipped alongside the app file. weight_name is required
 # because community LoRAs use custom filenames.
+# v2: removed dejpeg (over-smoothing), reduced color 0.4 → 0.3
 DEFAULT_MANIFEST = {
     "base_model": "Tongyi-MAI/Z-Image-Turbo",
     "output_repo": TARGET_REPO,
@@ -45,9 +46,7 @@ DEFAULT_MANIFEST = {
          "adapter_name": "nsfw", "scale": 0.5},
         {"repo_id": "renderartist/Technically-Color-Z-Image-Turbo",
          "weight_name": "Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors",
-         "adapter_name": "color", "scale": 0.4},
-        {"repo_id": "wcde/Z-Image-Turbo-DeJPEG-Lora", "weight_name": "dejpeg_v3.safetensors",
-         "adapter_name": "dejpeg", "scale": 0.3},
+         "adapter_name": "color", "scale": 0.3},
     ],
 }
 

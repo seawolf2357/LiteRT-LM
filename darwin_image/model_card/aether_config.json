@@ -33,7 +33,9 @@
   "lora_stack": [
     {"repo_id": "Shakker-Labs/AWPortrait-Z", "scale": 0.7, "purpose": "portrait"},
     {"repo_id": "qqnyanddld/nsfw-z-image-lora", "scale": 0.5, "purpose": "uncensored"},
-    {"repo_id": "renderartist/Technically-Color-Z-Image-Turbo", "scale": 0.4, "purpose": "color"},
-    {"repo_id": "wcde/Z-Image-Turbo-DeJPEG-Lora", "scale": 0.3, "purpose": "dejpeg"}
-  ]
+    {"repo_id": "renderartist/Technically-Color-Z-Image-Turbo", "scale": 0.3, "purpose": "color"}
+  ],
+  "lora_stack_changelog": {
+    "v2_2026-04-10": "Removed dejpeg (delta_norm 3.67 caused over-smoothing); reduced color 0.4→0.3"
+  }
 }

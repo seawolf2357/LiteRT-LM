@@ -14,12 +14,12 @@ class LoraConfig:
     commit_sha: Optional[str] = None
 
 
-# Default LoRA stack for Darwin-Image-v1
+# Default LoRA stack for Darwin-Image-v1 (v2: rebalanced)
+# Removed dejpeg (over-smoothing), reduced color 0.4 → 0.3
 DEFAULT_LORA_STACK: List[LoraConfig] = [
     LoraConfig(repo_id="Shakker-Labs/AWPortrait-Z", scale=0.7, adapter_name="portrait"),
     LoraConfig(repo_id="qqnyanddld/nsfw-z-image-lora", scale=0.5, adapter_name="nsfw"),
-    LoraConfig(repo_id="renderartist/Technically-Color-Z-Image-Turbo", scale=0.4, adapter_name="color"),
-    LoraConfig(repo_id="wcde/Z-Image-Turbo-DeJPEG-Lora", scale=0.3, adapter_name="dejpeg"),
+    LoraConfig(repo_id="renderartist/Technically-Color-Z-Image-Turbo", scale=0.3, adapter_name="color"),
 ]
 
 
