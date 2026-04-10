@@ -265,10 +265,10 @@ Private org Space — requires `HF_TOKEN` secret with access to FINAL-Bench.
 """
 
 EXAMPLES = [
-    ["cinematic portrait of a korean woman, golden hour, 85mm f1.4", "", 42, 8, 3.5, 1024, 1024, 3, 8.0, True, True, False, ""],
-    ['movie poster featuring cherry blossoms around Namsan Tower "봄의 서울"', "", 42, 8, 3.5, 1024, 1024, 3, 8.0, True, True, False, ""],
-    ["vibrant tokyo street at night with neon lights, rain reflections", "", 7, 8, 3.5, 1024, 1024, 2, 7.5, True, True, False, ""],
-    ["cute kitten drinking a tiny latte, warm window light, bokeh", "", 123, 8, 3.5, 1024, 1024, 1, 7.0, False, False, False, ""],
+    ["cinematic portrait of a korean woman, golden hour, 85mm f1.4", "", 42, 9, 0.0, 1024, 1024, 3, 8.0, True, True, False, ""],
+    ['movie poster featuring cherry blossoms around Namsan Tower "봄의 서울"', "", 42, 9, 0.0, 1024, 1024, 3, 8.0, True, True, False, ""],
+    ["vibrant tokyo street at night with neon lights, rain reflections", "", 7, 9, 0.0, 1024, 1024, 2, 7.5, True, True, False, ""],
+    ["cute kitten drinking a tiny latte, warm window light, bokeh", "", 123, 9, 0.0, 1024, 1024, 1, 7.0, False, False, False, ""],
 ]
 
 
@@ -301,8 +301,9 @@ def build_ui():
                         with gr.Accordion("Generation Settings", open=False):
                             with gr.Row():
                                 seed = gr.Number(label="Seed (-1 for random)", value=42, precision=0)
-                                num_steps = gr.Slider(4, 16, value=8, step=1, label="Steps")
-                                guidance = gr.Slider(1.0, 7.0, value=3.5, step=0.5, label="Guidance")
+                                num_steps = gr.Slider(6, 16, value=9, step=1, label="Steps")
+                                # Z-Image Turbo official: guidance_scale=0.0. Higher values break distilled flow matching.
+                                guidance = gr.Slider(0.0, 4.0, value=0.0, step=0.5, label="Guidance (0 = Turbo default)")
                             with gr.Row():
                                 height = gr.Slider(512, 1536, value=1024, step=64, label="Height")
                                 width = gr.Slider(512, 1536, value=1024, step=64, label="Width")

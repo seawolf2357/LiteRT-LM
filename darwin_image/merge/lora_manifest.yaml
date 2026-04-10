@@ -1,28 +1,38 @@
 ---
 # LoRA stack to fuse into Z-Image Turbo for Darwin-Image-v1
-# All LoRAs share the same architecture (Z-Image Turbo DiT, dim=3840)
-# so direct fuse_lora() works without SVD projection or information loss.
+#
+# All LoRAs share the same architecture (Z-Image Turbo DiT, dim=3840) and use
+# the ai-toolkit standard format (`diffusion_model.layers.N.X.lora_A/B.weight`,
+# 480 keys, 30 layers × attention/adaLN/feedforward modules). Direct matrix
+# fusion works without SVD projection or information loss.
+#
+# `weight_name` is required because these repos use custom filenames, not the
+# default `pytorch_lora_weights.safetensors` that diffusers auto-loader expects.
 
 base_model: Tongyi-MAI/Z-Image-Turbo
 output_repo: FINAL-Bench/Darwin-Image-v1
 
 loras:
   - repo_id: Shakker-Labs/AWPortrait-Z
+    weight_name: AWPortrait-Z.safetensors
     adapter_name: portrait
     scale: 0.7
     purpose: "Human portrait quality (denoise, lighting, diverse ethnicities)"
 
   - repo_id: qqnyanddld/nsfw-z-image-lora
+    weight_name: lora-women.safetensors
     adapter_name: nsfw
     scale: 0.5
-    purpose: "Uncensored generation (NSFW)"
+    purpose: "Uncensored generation — generic women anatomy"
 
   - repo_id: renderartist/Technically-Color-Z-Image-Turbo
+    weight_name: Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors
     adapter_name: color
     scale: 0.4
     purpose: "Enhanced color/saturation palette"
 
   - repo_id: wcde/Z-Image-Turbo-DeJPEG-Lora
+    weight_name: dejpeg_v3.safetensors
     adapter_name: dejpeg
     scale: 0.3
     purpose: "JPEG artifact removal / sharpness"
@@ -34,3 +44,8 @@ validation:
     - "detailed close-up of a cat's eye, macro photography"
   expected_test_latency_sec: 3.0
   min_output_size_gb: 10
+  # Z-Image Turbo official recommended generation params
+  sampler:
+    num_inference_steps: 9
+    guidance_scale: 0.0
+    negative_prompt: ""

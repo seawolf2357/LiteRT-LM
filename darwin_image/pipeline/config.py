@@ -51,21 +51,26 @@ class AetherConfig:
     enable_vlm_judge: bool = True
     seed_increment: int = 1
     keep_all_iterations: bool = True
+    # Per-iteration override for seed-only variation
+    seed_only_retry: bool = False
 
 
 @dataclass
 class PipelineConfig:
-    """Top-level Darwin Image pipeline configuration."""
+    """Top-level Darwin Image pipeline configuration.
+
+    Defaults tuned for Z-Image Turbo (8-step distilled model). The Tongyi-MAI
+    official recommendation is guidance_scale=0.0 (CFG disabled) and 9 sampler
+    steps. Using higher CFG or strong negative prompts darkens the output and
+    breaks the distilled flow matching objective.
+    """
     base_model: str = "FINAL-Bench/Darwin-Image-v1"
     fallback_base_model: str = "Tongyi-MAI/Z-Image-Turbo"
-    num_inference_steps: int = 8
-    guidance_scale: float = 3.5
+    num_inference_steps: int = 9
+    guidance_scale: float = 0.0  # Z-Image Turbo requires CFG disabled
     height: int = 1024
     width: int = 1024
-    negative_prompt: str = (
-        "lowres, blurry, deformed, extra fingers, extra limbs, watermark, "
-        "bad anatomy, text artifacts, jpeg artifacts, worst quality"
-    )
+    negative_prompt: str = ""  # Turbo models ignore negative prompts at CFG=0
     inpaint_strength: float = 0.35
     inpaint_steps: int = 12
     font_path: str = "assets/NotoSansKR-Bold.ttf"

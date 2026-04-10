@@ -66,22 +66,24 @@ def deploy_model_card(api: HfApi, token: str):
 
 
 def deploy_merger(api: HfApi, token: str):
-    """Upload merger Space files + fuse_loras.py + lora_manifest.yaml."""
+    """Upload merger Space files + fuse_loras.py + lora_manifest.yaml + manual_fuse.py."""
     print(f"\n[merger] Deploying merger Space to {MERGER_SPACE}...")
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         # Copy space_merger/* (app.py, requirements.txt, README.md)
         copy_tree(ROOT / "space_merger", tmp)
-        # Include the manifest and helper script
+        # Include the manifest and helper scripts
         shutil.copy(ROOT / "merge" / "lora_manifest.yaml", tmp / "lora_manifest.yaml")
         shutil.copy(ROOT / "merge" / "fuse_loras.py", tmp / "fuse_loras.py")
         shutil.copy(ROOT / "merge" / "upload_merged.py", tmp / "upload_merged.py")
+        # Ship the manual_fuse module flat so `from manual_fuse import ...` works
+        shutil.copy(ROOT / "pipeline" / "manual_fuse.py", tmp / "manual_fuse.py")
 
         upload_folder(
             folder_path=str(tmp),
             repo_id=MERGER_SPACE,
             repo_type="space",
-            commit_message="Deploy Darwin Image Merger Space",
+            commit_message="Deploy Darwin Image Merger Space with manual LoRA fuse",
             token=token,
             ignore_patterns=["__pycache__", "*.pyc", ".DS_Store"],
         )

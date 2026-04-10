@@ -33,15 +33,21 @@ MANIFEST_PATH = HERE / "lora_manifest.yaml"
 TARGET_REPO = "FINAL-Bench/Darwin-Image-v1"
 
 
-# The manifest is shipped alongside the app file
+# The manifest is shipped alongside the app file. weight_name is required
+# because community LoRAs use custom filenames.
 DEFAULT_MANIFEST = {
     "base_model": "Tongyi-MAI/Z-Image-Turbo",
     "output_repo": TARGET_REPO,
     "loras": [
-        {"repo_id": "Shakker-Labs/AWPortrait-Z", "adapter_name": "portrait", "scale": 0.7},
-        {"repo_id": "qqnyanddld/nsfw-z-image-lora", "adapter_name": "nsfw", "scale": 0.5},
-        {"repo_id": "renderartist/Technically-Color-Z-Image-Turbo", "adapter_name": "color", "scale": 0.4},
-        {"repo_id": "wcde/Z-Image-Turbo-DeJPEG-Lora", "adapter_name": "dejpeg", "scale": 0.3},
+        {"repo_id": "Shakker-Labs/AWPortrait-Z", "weight_name": "AWPortrait-Z.safetensors",
+         "adapter_name": "portrait", "scale": 0.7},
+        {"repo_id": "qqnyanddld/nsfw-z-image-lora", "weight_name": "lora-women.safetensors",
+         "adapter_name": "nsfw", "scale": 0.5},
+        {"repo_id": "renderartist/Technically-Color-Z-Image-Turbo",
+         "weight_name": "Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors",
+         "adapter_name": "color", "scale": 0.4},
+        {"repo_id": "wcde/Z-Image-Turbo-DeJPEG-Lora", "weight_name": "dejpeg_v3.safetensors",
+         "adapter_name": "dejpeg", "scale": 0.3},
     ],
 }
 
@@ -108,7 +114,8 @@ def run_merge_and_upload(
 
         # ------------------------------------------------------------- Step 2
         yield log(""), ""
-        yield log(f"[2/4] Fusing {len(manifest['loras'])} LoRAs..."), ""
+        yield log(f"[2/4] Manual fusing {len(manifest['loras'])} LoRAs..."), ""
+        yield log(f"  (using direct B@A matrix update — bypasses diffusers auto-loader)"), ""
 
         fuse_report = {
             "base_model": base_model,
@@ -118,34 +125,84 @@ def run_merge_and_upload(
             "vlm_bundled": None,
         }
 
+        from huggingface_hub import hf_hub_download
+        from safetensors.torch import load_file
+        from manual_fuse import fuse_into_transformer
+
         for i, entry in enumerate(manifest["loras"]):
             repo_id = entry["repo_id"]
+            weight_name = entry.get("weight_name")
             scale = float(entry["scale"])
             adapter_name = entry.get("adapter_name", repo_id.split("/")[-1])
             progress_val = 0.1 + (0.25 * (i + 1) / len(manifest["loras"]))
             progress(progress_val, desc=f"Fusing {adapter_name}...")
 
-            yield log(f"  → {adapter_name} ({repo_id}) scale={scale}"), ""
+            yield log(f"  → {adapter_name} ({repo_id} / {weight_name}) scale={scale}"), ""
+
+            if not weight_name:
+                yield log(f"    ⚠ Skipped: no weight_name in manifest"), ""
+                fuse_report["loras_skipped"].append({
+                    "repo_id": repo_id,
+                    "reason": "missing weight_name in manifest",
+                })
+                continue
 
             try:
-                try:
-                    pipe.load_lora_weights(repo_id, adapter_name=adapter_name, token=token)
-                except TypeError:
-                    pipe.load_lora_weights(repo_id, token=token)
-                pipe.fuse_lora(lora_scale=scale)
-                pipe.unload_lora_weights()
-                fuse_report["loras_applied"].append({
-                    "repo_id": repo_id,
-                    "scale": scale,
-                })
-                yield log(f"    ✓ Fused at scale {scale}"), ""
+                # 1. Download LoRA safetensors file
+                lora_path = hf_hub_download(
+                    repo_id=repo_id,
+                    filename=weight_name,
+                    token=token,
+                )
+                yield log(f"    · downloaded {os.path.basename(lora_path)}"), ""
+
+                # 2. Load state_dict to CPU first
+                lora_sd = load_file(lora_path, device="cpu")
+                yield log(f"    · {len(lora_sd)} tensors loaded"), ""
+
+                # 3. Manual fuse into pipe.transformer in-place
+                stats = fuse_into_transformer(
+                    pipe.transformer,
+                    lora_sd,
+                    scale=scale,
+                    verbose=True,
+                )
+                del lora_sd
+                import gc; gc.collect()
+                torch.cuda.empty_cache()
+
+                if stats["fused"] == 0:
+                    yield log(f"    ⚠ No modules matched "
+                              f"(lora_modules={stats['lora_modules']}, "
+                              f"missing={stats['missing']}, "
+                              f"skipped={stats['skipped_incomplete']})"), ""
+                    if stats["missing_keys"]:
+                        yield log(f"    · sample missing: {stats['missing_keys'][:3]}"), ""
+                    fuse_report["loras_skipped"].append({
+                        "repo_id": repo_id,
+                        "weight_name": weight_name,
+                        "reason": f"zero modules matched: {stats}",
+                    })
+                else:
+                    yield log(f"    ✓ Fused {stats['fused']}/{stats['lora_modules']} modules"), ""
+                    if stats["samples"]:
+                        sample = stats["samples"][0]
+                        yield log(f"    · sample: {sample['key']} rank={sample['rank']} "
+                                  f"delta_norm={sample['delta_norm']:.4f}"), ""
+                    fuse_report["loras_applied"].append({
+                        "repo_id": repo_id,
+                        "weight_name": weight_name,
+                        "scale": scale,
+                        "fused": stats["fused"],
+                        "lora_modules": stats["lora_modules"],
+                    })
             except Exception as exc:
                 yield log(f"    ⚠ Failed: {exc}"), ""
-                fuse_report["loras_skipped"].append({"repo_id": repo_id, "reason": str(exc)})
-                try:
-                    pipe.unload_lora_weights()
-                except Exception:
-                    pass
+                fuse_report["loras_skipped"].append({
+                    "repo_id": repo_id,
+                    "weight_name": weight_name,
+                    "reason": str(exc),
+                })
 
         yield log(""), ""
         yield log(f"  Applied: {len(fuse_report['loras_applied'])}, "

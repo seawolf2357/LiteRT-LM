@@ -12,11 +12,12 @@
     "keep_all_iterations": true
   },
   "generation_defaults": {
-    "num_inference_steps": 8,
-    "guidance_scale": 3.5,
+    "num_inference_steps": 9,
+    "guidance_scale": 0.0,
     "height": 1024,
     "width": 1024,
-    "negative_prompt": "lowres, blurry, deformed, extra fingers, extra limbs, watermark, bad anatomy, text artifacts, jpeg artifacts, worst quality"
+    "negative_prompt": "",
+    "note": "Z-Image Turbo is a distilled model. CFG must be disabled (0.0); higher values cause darkening and flow matching drift."
   },
   "inpaint": {
     "strength": 0.35,

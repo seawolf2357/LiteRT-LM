@@ -106,55 +106,93 @@ def main():
         "loras_skipped": [],
     }
 
-    # Sequential fuse — each LoRA's effect accumulates into base weights
+    # Manual fuse — direct matrix update, bypasses diffusers auto-loader
+    # (community LoRAs use custom filenames + key prefixes that break the default path)
+    try:
+        # Import manual_fuse — either from pipeline package or local flat copy
+        try:
+            from darwin_image.pipeline.manual_fuse import fuse_into_transformer
+        except ImportError:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+            try:
+                from pipeline.manual_fuse import fuse_into_transformer
+            except ImportError:
+                from manual_fuse import fuse_into_transformer
+    except ImportError as exc:
+        print(f"[fuse] ERROR: cannot import manual_fuse: {exc}")
+        sys.exit(1)
+
+    from safetensors.torch import load_file
+
+    # Sequential fuse — each LoRA's delta accumulates into base weights
     for entry in manifest["loras"]:
         repo_id = entry["repo_id"]
+        weight_name = entry.get("weight_name")
         scale = float(entry["scale"])
         adapter_name = entry.get("adapter_name", repo_id.split("/")[-1])
         purpose = entry.get("purpose", "")
 
-        print(f"\n[fuse] === {adapter_name} ({repo_id}) scale={scale} ===")
+        print(f"\n[fuse] === {adapter_name} ({repo_id} / {weight_name}) scale={scale} ===")
         print(f"[fuse] Purpose: {purpose}")
 
-        try:
-            pipe.load_lora_weights(repo_id, adapter_name=adapter_name, token=token)
-        except TypeError:
-            # Older diffusers doesn't accept adapter_name
-            try:
-                pipe.load_lora_weights(repo_id, token=token)
-            except Exception as exc:
-                msg = f"[fuse] FAILED to load {repo_id}: {exc}"
-                print(msg)
-                fuse_report["loras_skipped"].append({"repo_id": repo_id, "reason": str(exc)})
-                if args.strict:
-                    sys.exit(1)
-                continue
-        except Exception as exc:
-            msg = f"[fuse] FAILED to load {repo_id}: {exc}"
-            print(msg)
-            fuse_report["loras_skipped"].append({"repo_id": repo_id, "reason": str(exc)})
+        if not weight_name:
+            print(f"[fuse] SKIPPED: manifest entry missing weight_name")
+            fuse_report["loras_skipped"].append({
+                "repo_id": repo_id,
+                "reason": "missing weight_name",
+            })
             if args.strict:
                 sys.exit(1)
             continue
 
         try:
-            pipe.fuse_lora(lora_scale=scale)
-            pipe.unload_lora_weights()
-            fuse_report["loras_applied"].append({
-                "repo_id": repo_id,
-                "adapter_name": adapter_name,
-                "scale": scale,
-                "purpose": purpose,
-            })
-            print(f"[fuse] ✓ {adapter_name} fused at scale {scale}")
+            from huggingface_hub import hf_hub_download
+            lora_path = hf_hub_download(
+                repo_id=repo_id,
+                filename=weight_name,
+                token=token,
+            )
+            lora_sd = load_file(lora_path, device="cpu")
+            stats = fuse_into_transformer(
+                pipe.transformer,
+                lora_sd,
+                scale=scale,
+                verbose=True,
+            )
+            del lora_sd
+            import gc; gc.collect()
+            torch.cuda.empty_cache()
+
+            if stats["fused"] == 0:
+                msg = f"[fuse] NOTHING fused for {repo_id}: {stats}"
+                print(msg)
+                fuse_report["loras_skipped"].append({
+                    "repo_id": repo_id,
+                    "weight_name": weight_name,
+                    "reason": f"zero modules matched: {stats}",
+                })
+                if args.strict:
+                    sys.exit(1)
+            else:
+                fuse_report["loras_applied"].append({
+                    "repo_id": repo_id,
+                    "weight_name": weight_name,
+                    "adapter_name": adapter_name,
+                    "scale": scale,
+                    "purpose": purpose,
+                    "fused": stats["fused"],
+                    "lora_modules": stats["lora_modules"],
+                })
+                print(f"[fuse] ✓ {adapter_name} fused {stats['fused']}/{stats['lora_modules']} modules at scale {scale}")
         except Exception as exc:
-            msg = f"[fuse] FAILED to fuse {repo_id}: {exc}"
+            msg = f"[fuse] FAILED for {repo_id}: {exc}"
             print(msg)
-            fuse_report["loras_skipped"].append({"repo_id": repo_id, "reason": str(exc)})
-            try:
-                pipe.unload_lora_weights()
-            except Exception:
-                pass
+            fuse_report["loras_skipped"].append({
+                "repo_id": repo_id,
+                "weight_name": weight_name,
+                "reason": str(exc),
+            })
             if args.strict:
                 sys.exit(1)
 
