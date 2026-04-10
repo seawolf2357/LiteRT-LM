@@ -20,8 +20,6 @@ tags:
   - vlm-judge
   - korean-text
 suggested_storage: small
-preload_from_hub:
-  - FINAL-Bench/Darwin-Image-v1
 short_description: Darwin Image — VLM-guided AETHER metacognitive image gen
 ---
 
