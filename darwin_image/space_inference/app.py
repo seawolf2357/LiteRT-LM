@@ -273,7 +273,7 @@ EXAMPLES = [
 
 
 def build_ui():
-    with gr.Blocks(title="Darwin Image Gen", theme=gr.themes.Soft()) as demo:
+    with gr.Blocks(title="Darwin Image Gen") as demo:
         gr.Markdown(TITLE)
         gr.Markdown(DESCRIPTION)
 
@@ -402,4 +402,8 @@ def build_ui():
 
 if __name__ == "__main__":
     demo = build_ui()
-    demo.queue(max_size=8).launch(server_name="0.0.0.0", server_port=7860)
+    demo.queue(max_size=8).launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        theme=gr.themes.Soft(),
+    )
