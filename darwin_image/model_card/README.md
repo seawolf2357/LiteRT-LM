@@ -21,17 +21,43 @@ base_model:
 inference: false
 ---
 
-# Darwin-Image-v1
+# Darwin-Image-v1 — Unified DiT + VLM
 
-**Darwin-Image-v1** is a fused Z-Image Turbo checkpoint that combines 4 LoRAs
-into the base model, producing a single unified pipeline optimized for
-portrait quality, enhanced color, artifact removal, and uncensored generation.
+**Darwin-Image-v1** is a **physically unified** model repository that
+combines two models into a single HF repo:
 
-It is designed to be used with the **Darwin-4B-David VLM judge** inside the
-AETHER metacognitive loop deployed at
-[`FINAL-Bench/darwin-image-gen`](https://huggingface.co/spaces/FINAL-Bench/darwin-image-gen).
+1. **Z-Image Turbo** (6B DiT) at the repo root, with 4 LoRAs fused into
+   the transformer weights (no runtime adapter loading).
+2. **Darwin-4B-David** (Gemma4 multimodal VLM, ~16GB bf16) inside the
+   `vlm_judge/` subfolder.
 
-## Architecture
+Both models coexist as real safetensors files in this single repo, so a
+single `from_pretrained()` call downloads everything needed for the
+AETHER metacognitive image generation pipeline.
+
+## Repo Layout
+
+```
+FINAL-Bench/Darwin-Image-v1/
+├── model_index.json            # Z-Image pipeline manifest
+├── scheduler/                  # Z-Image components
+├── text_encoder/               #   (Qwen3)
+├── tokenizer/
+├── transformer/                # ★ DiT with 4 LoRAs fused
+├── vae/
+├── vlm_judge/                  # ★★ Darwin-4B-David
+│   ├── config.json             #    Gemma4ForConditionalGeneration
+│   ├── model.safetensors       #    ~16GB bfloat16
+│   ├── tokenizer.json
+│   ├── chat_template.jinja
+│   └── generation_config.json
+├── lora_manifest.yaml
+├── aether_config.json
+├── fuse_report.json
+└── README.md  (this file)
+```
+
+## LoRA Stack Fused Into DiT
 
 ```
 Z-Image Turbo (6B DiT, bf16)
@@ -46,6 +72,7 @@ All LoRAs share Z-Image's DiT architecture (dim=3840), so direct
 
 ## Usage
 
+### DiT only (text-to-image)
 ```python
 from diffusers import DiffusionPipeline
 import torch
@@ -53,7 +80,7 @@ import torch
 pipe = DiffusionPipeline.from_pretrained(
     "FINAL-Bench/Darwin-Image-v1",
     torch_dtype=torch.bfloat16,
-    token="hf_...",  # if private
+    token="hf_...",
 ).to("cuda")
 
 image = pipe(
@@ -63,7 +90,25 @@ image = pipe(
     height=1024,
     width=1024,
 ).images[0]
-image.save("out.png")
+```
+
+### Load the bundled VLM judge (from subfolder)
+```python
+from transformers import AutoModel, AutoProcessor
+import torch
+
+judge = AutoModel.from_pretrained(
+    "FINAL-Bench/Darwin-Image-v1",
+    subfolder="vlm_judge",
+    torch_dtype=torch.bfloat16,
+    device_map="cuda",
+    token="hf_...",
+)
+processor = AutoProcessor.from_pretrained(
+    "FINAL-Bench/Darwin-Image-v1",
+    subfolder="vlm_judge",
+    token="hf_...",
+)
 ```
 
 ## AETHER Integration

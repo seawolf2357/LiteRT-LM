@@ -116,41 +116,72 @@ class DarwinJudge:
                 bnb_4bit_use_double_quant=True,
             )
 
-        # Try Gemma4ForConditionalGeneration first, fall back to AutoModel
-        try:
-            from transformers import Gemma4ForConditionalGeneration
-            self._model = Gemma4ForConditionalGeneration.from_pretrained(
-                self.config.model_id,
-                torch_dtype=dtype,
-                device_map=self.config.device,
-                token=self.token,
-                **quant_kwargs,
-            )
-        except (ImportError, AttributeError):
-            from transformers import AutoModelForCausalLM
-            self._model = AutoModelForCausalLM.from_pretrained(
-                self.config.model_id,
-                torch_dtype=dtype,
-                device_map=self.config.device,
-                trust_remote_code=True,
-                token=self.token,
-                **quant_kwargs,
-            )
+        # Build list of (model_id, subfolder) candidates to try in order
+        candidates = [(self.config.model_id, self.config.subfolder)]
+        if self.config.fallback_model_id and self.config.fallback_model_id != self.config.model_id:
+            candidates.append((self.config.fallback_model_id, None))
 
-        try:
-            self._processor = AutoProcessor.from_pretrained(
-                self.config.model_id,
-                token=self.token,
-                trust_remote_code=True,
-            )
-        except Exception as exc:
-            print(f"[DarwinJudge] AutoProcessor failed ({exc}), using tokenizer only")
-            self._processor = None
+        last_exc = None
+        for model_id, subfolder in candidates:
+            sub_kwargs = {}
+            if subfolder:
+                sub_kwargs["subfolder"] = subfolder
+            location_desc = f"{model_id}" + (f"/{subfolder}" if subfolder else "")
+            print(f"[DarwinJudge] Loading VLM from {location_desc}...")
 
-        self._tokenizer = AutoTokenizer.from_pretrained(
-            self.config.model_id,
-            token=self.token,
-            trust_remote_code=True,
+            try:
+                # Try Gemma4ForConditionalGeneration first
+                try:
+                    from transformers import Gemma4ForConditionalGeneration
+                    self._model = Gemma4ForConditionalGeneration.from_pretrained(
+                        model_id,
+                        torch_dtype=dtype,
+                        device_map=self.config.device,
+                        token=self.token,
+                        **sub_kwargs,
+                        **quant_kwargs,
+                    )
+                except (ImportError, AttributeError):
+                    from transformers import AutoModelForCausalLM
+                    self._model = AutoModelForCausalLM.from_pretrained(
+                        model_id,
+                        torch_dtype=dtype,
+                        device_map=self.config.device,
+                        trust_remote_code=True,
+                        token=self.token,
+                        **sub_kwargs,
+                        **quant_kwargs,
+                    )
+
+                try:
+                    self._processor = AutoProcessor.from_pretrained(
+                        model_id,
+                        token=self.token,
+                        trust_remote_code=True,
+                        **sub_kwargs,
+                    )
+                except Exception as exc:
+                    print(f"[DarwinJudge] AutoProcessor failed ({exc}), using tokenizer only")
+                    self._processor = None
+
+                self._tokenizer = AutoTokenizer.from_pretrained(
+                    model_id,
+                    token=self.token,
+                    trust_remote_code=True,
+                    **sub_kwargs,
+                )
+                print(f"[DarwinJudge] ✓ VLM loaded from {location_desc}")
+                return
+            except Exception as exc:
+                last_exc = exc
+                print(f"[DarwinJudge] Failed to load from {location_desc}: {exc}")
+                self._model = None
+                self._processor = None
+                self._tokenizer = None
+                continue
+
+        raise RuntimeError(
+            f"Could not load VLM from any candidate: {candidates}. Last error: {last_exc}"
         )
 
     def cleanup(self):

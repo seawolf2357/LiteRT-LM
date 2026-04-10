@@ -76,9 +76,11 @@ def _lazy_load():
         _pipe._load_t2i()
         print("[app] Z-Image loaded.")
 
-        print("[app] Loading Darwin-4B-David VLM judge...")
+        print("[app] Loading Darwin-4B-David VLM judge from unified repo (subfolder='vlm_judge')...")
         judge_cfg = JudgeConfig(
-            model_id="FINAL-Bench/Darwin-4B-David",
+            model_id="FINAL-Bench/Darwin-Image-v1",
+            subfolder="vlm_judge",
+            fallback_model_id="FINAL-Bench/Darwin-4B-David",
             dtype="bfloat16",
             device="cuda",
         )

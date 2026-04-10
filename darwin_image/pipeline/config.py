@@ -25,8 +25,15 @@ DEFAULT_LORA_STACK: List[LoraConfig] = [
 
 @dataclass
 class JudgeConfig:
-    """Darwin-4B-David VLM judge configuration."""
-    model_id: str = "FINAL-Bench/Darwin-4B-David"
+    """Darwin-4B-David VLM judge configuration.
+
+    When `model_id` points to the unified Darwin-Image-v1 repo, set
+    `subfolder="vlm_judge"` to load the bundled Darwin-4B-David. Otherwise
+    leave `subfolder=None` to load the standalone Darwin-4B-David repo.
+    """
+    model_id: str = "FINAL-Bench/Darwin-Image-v1"
+    subfolder: Optional[str] = "vlm_judge"
+    fallback_model_id: str = "FINAL-Bench/Darwin-4B-David"
     dtype: str = "bfloat16"
     device: str = "cuda"
     max_new_tokens: int = 512

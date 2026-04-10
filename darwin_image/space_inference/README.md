@@ -11,8 +11,6 @@ hardware: a100-large
 python_version: "3.11"
 models:
   - FINAL-Bench/Darwin-Image-v1
-  - FINAL-Bench/Darwin-4B-David
-  - Tongyi-MAI/Z-Image-Turbo
 tags:
   - darwin-image
   - aether-metacognitive
@@ -25,11 +23,20 @@ short_description: Darwin Image — VLM-guided AETHER metacognitive image gen
 
 # Darwin Image Gen
 
-**Darwin Image** is a VLM-guided image generation system that combines:
-- **Z-Image Turbo** (6B DiT, fused with 4 LoRAs) for generation
-- **Darwin-4B-David** (Gemma4 multimodal) as the quality judge
+**Darwin Image** is a **physically unified** model combining DiT image
+generation and multimodal VLM judging into a single HuggingFace repo
+(`FINAL-Bench/Darwin-Image-v1`):
+- **Z-Image Turbo** (6B DiT, fused with 4 LoRAs) at the repo root
+- **Darwin-4B-David** (Gemma4 multimodal, ~16GB) at `subfolder="vlm_judge"`
 - **AETHER metacognitive loop** for self-improvement
 - **Korean text inpainting** for 100% accurate Hangul rendering
+
+Both models are downloaded in a single `from_pretrained` call:
+```python
+pipe = DiffusionPipeline.from_pretrained("FINAL-Bench/Darwin-Image-v1")
+judge = AutoModel.from_pretrained("FINAL-Bench/Darwin-Image-v1",
+                                   subfolder="vlm_judge")
+```
 
 ## Features
 

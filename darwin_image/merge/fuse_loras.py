@@ -1,22 +1,32 @@
-"""Fuse 4 LoRAs into Z-Image Turbo and save the merged pipeline.
+"""Fuse 4 LoRAs into Z-Image Turbo AND bundle Darwin-4B-David VLM into a
+single unified model repository.
+
+Produces a self-contained diffusers pipeline directory with both:
+  - Z-Image Turbo (6B DiT, LoRA-fused) at the repo root
+  - Darwin-4B-David VLM (Gemma4, ~16GB) under the `vlm_judge/` subfolder
+
+After upload, consumers load via:
+    pipe = DiffusionPipeline.from_pretrained("FINAL-Bench/Darwin-Image-v1")
+    judge = AutoModel.from_pretrained("FINAL-Bench/Darwin-Image-v1",
+                                      subfolder="vlm_judge")
 
 Usage:
     python fuse_loras.py \
         --manifest lora_manifest.yaml \
         --output ./Darwin-Image-v1 \
-        --dtype bfloat16
-
-The merged output is a standard diffusers pipeline directory that can be
-loaded via `DiffusionPipeline.from_pretrained("./Darwin-Image-v1")`.
+        --dtype bfloat16 \
+        --vlm-source FINAL-Bench/Darwin-4B-David
 
 Design:
     1. Load base Z-Image Turbo (bf16)
     2. For each LoRA in manifest:
        a. Load weights into pipeline
-       b. Inspect target_modules — abort if incompatible
-       c. fuse_lora(lora_scale=X)
-       d. unload_lora_weights()
-    3. save_pretrained(output_dir)
+       b. fuse_lora(lora_scale=X)
+       c. unload_lora_weights()
+    3. save_pretrained(output_dir)  -> Z-Image components
+    4. snapshot_download(Darwin-4B-David) -> copy into output_dir/vlm_judge/
+    5. Write fuse_report.json + copy lora_manifest.yaml
+
 
 All LoRAs share Z-Image's DiT architecture (dim=3840), so direct fusing
 works without rank alignment or SVD projection.
@@ -52,17 +62,20 @@ def inspect_lora_targets(pipe, label: str) -> set:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fuse LoRAs into Z-Image Turbo")
+    parser = argparse.ArgumentParser(description="Fuse LoRAs into Z-Image Turbo + bundle VLM")
     parser.add_argument("--manifest", type=str, default="lora_manifest.yaml")
     parser.add_argument("--output", type=str, default="./Darwin-Image-v1")
     parser.add_argument("--dtype", type=str, default="bfloat16", choices=["bfloat16", "float16", "float32"])
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--test", action="store_true", help="Run validation prompts after fusing")
     parser.add_argument("--strict", action="store_true", help="Abort on any LoRA load failure")
+    parser.add_argument("--vlm-source", type=str, default="FINAL-Bench/Darwin-4B-David",
+                        help="Source VLM repo to bundle into output/vlm_judge/")
+    parser.add_argument("--skip-vlm", action="store_true", help="Skip VLM bundling (Z-Image only)")
     args = parser.parse_args()
 
     from diffusers import DiffusionPipeline
-    from huggingface_hub import hf_hub_download
+    from huggingface_hub import hf_hub_download, snapshot_download
 
     dtype = getattr(torch, args.dtype)
     manifest = load_manifest(args.manifest)
@@ -148,10 +161,47 @@ def main():
     print(f"\n[fuse] All LoRAs processed. Applied: {len(fuse_report['loras_applied'])}, "
           f"Skipped: {len(fuse_report['loras_skipped'])}")
 
-    # Save merged pipeline
-    print(f"\n[fuse] Saving merged pipeline to {args.output}...")
+    # Save merged Z-Image pipeline
+    print(f"\n[fuse] Saving merged Z-Image pipeline to {args.output}...")
     os.makedirs(args.output, exist_ok=True)
     pipe.save_pretrained(args.output, safe_serialization=True)
+
+    # Free GPU before VLM download
+    del pipe
+    torch.cuda.empty_cache()
+
+    # -------- VLM bundling: copy Darwin-4B-David into vlm_judge/ subdir --------
+    if not args.skip_vlm:
+        vlm_dir = os.path.join(args.output, "vlm_judge")
+        print(f"\n[fuse] Bundling VLM {args.vlm_source} into {vlm_dir}/...")
+        os.makedirs(vlm_dir, exist_ok=True)
+        try:
+            snapshot_download(
+                repo_id=args.vlm_source,
+                repo_type="model",
+                local_dir=vlm_dir,
+                token=token,
+                ignore_patterns=["*.png", "*.jpg", "*.jpeg", "*.md", "*.json.backup"],
+            )
+            # Count downloaded size
+            total_bytes = 0
+            for root, _, files in os.walk(vlm_dir):
+                for f in files:
+                    total_bytes += os.path.getsize(os.path.join(root, f))
+            fuse_report["vlm_bundled"] = {
+                "source": args.vlm_source,
+                "size_gb": round(total_bytes / (1024 ** 3), 2),
+            }
+            print(f"[fuse] ✓ VLM bundled: {total_bytes / (1024 ** 3):.2f} GB")
+        except Exception as exc:
+            msg = f"[fuse] VLM bundling FAILED: {exc}"
+            print(msg)
+            fuse_report["vlm_bundled"] = {"source": args.vlm_source, "error": str(exc)}
+            if args.strict:
+                sys.exit(1)
+    else:
+        print(f"[fuse] --skip-vlm set, skipping VLM bundling")
+        fuse_report["vlm_bundled"] = {"skipped": True}
 
     # Save fuse report
     report_path = os.path.join(args.output, "fuse_report.json")
@@ -159,13 +209,16 @@ def main():
         json.dump(fuse_report, f, indent=2, ensure_ascii=False)
     print(f"[fuse] Report saved to {report_path}")
 
-    # Optional validation
+    # Optional validation (reloads the saved pipeline — pipe was freed)
     if args.test:
         print(f"\n[fuse] Running validation prompts...")
-        pipe.set_progress_bar_config(disable=True)
+        test_pipe = DiffusionPipeline.from_pretrained(
+            args.output, torch_dtype=dtype
+        ).to(args.device)
+        test_pipe.set_progress_bar_config(disable=True)
         for i, prompt in enumerate(manifest.get("validation", {}).get("test_prompts", [])):
             try:
-                img = pipe(
+                img = test_pipe(
                     prompt=prompt,
                     num_inference_steps=8,
                     guidance_scale=3.5,
@@ -178,8 +231,11 @@ def main():
                 print(f"[fuse] ✓ Validation {i}: {prompt[:50]}... → {out_path}")
             except Exception as exc:
                 print(f"[fuse] Validation {i} failed: {exc}")
+        del test_pipe
+        torch.cuda.empty_cache()
 
-    print(f"\n[fuse] ✓ Done. Merged model at: {args.output}")
+    print(f"\n[fuse] ✓ Done. Unified model at: {args.output}")
+    print(f"[fuse]   Contains Z-Image Turbo (LoRA fused) + Darwin-4B-David VLM")
 
 
 if __name__ == "__main__":
