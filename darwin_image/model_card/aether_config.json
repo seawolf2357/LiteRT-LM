@@ -1,0 +1,38 @@
+{
+  "version": "1.0.0",
+  "model_id": "FINAL-Bench/Darwin-Image-v1",
+  "vlm_judge_id": "FINAL-Bench/Darwin-4B-David",
+  "aether_loop": {
+    "max_iter": 3,
+    "threshold": 8.0,
+    "enable_vlm_enhance": true,
+    "enable_vlm_judge": true,
+    "enable_mti": false,
+    "seed_increment": 1,
+    "keep_all_iterations": true
+  },
+  "generation_defaults": {
+    "num_inference_steps": 8,
+    "guidance_scale": 3.5,
+    "height": 1024,
+    "width": 1024,
+    "negative_prompt": "lowres, blurry, deformed, extra fingers, extra limbs, watermark, bad anatomy, text artifacts, jpeg artifacts, worst quality"
+  },
+  "inpaint": {
+    "strength": 0.35,
+    "num_steps": 12,
+    "mask_dilate_px": 12,
+    "font_default": "NotoSansCJK-Bold"
+  },
+  "mti": {
+    "entropy_percentile": 0.75,
+    "cfg_boost": 1.5,
+    "apply_to_steps": null
+  },
+  "lora_stack": [
+    {"repo_id": "Shakker-Labs/AWPortrait-Z", "scale": 0.7, "purpose": "portrait"},
+    {"repo_id": "qqnyanddld/nsfw-z-image-lora", "scale": 0.5, "purpose": "uncensored"},
+    {"repo_id": "renderartist/Technically-Color-Z-Image-Turbo", "scale": 0.4, "purpose": "color"},
+    {"repo_id": "wcde/Z-Image-Turbo-DeJPEG-Lora", "scale": 0.3, "purpose": "dejpeg"}
+  ]
+}

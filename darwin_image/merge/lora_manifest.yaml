@@ -1,0 +1,36 @@
+---
+# LoRA stack to fuse into Z-Image Turbo for Darwin-Image-v1
+# All LoRAs share the same architecture (Z-Image Turbo DiT, dim=3840)
+# so direct fuse_lora() works without SVD projection or information loss.
+
+base_model: Tongyi-MAI/Z-Image-Turbo
+output_repo: FINAL-Bench/Darwin-Image-v1
+
+loras:
+  - repo_id: Shakker-Labs/AWPortrait-Z
+    adapter_name: portrait
+    scale: 0.7
+    purpose: "Human portrait quality (denoise, lighting, diverse ethnicities)"
+
+  - repo_id: qqnyanddld/nsfw-z-image-lora
+    adapter_name: nsfw
+    scale: 0.5
+    purpose: "Uncensored generation (NSFW)"
+
+  - repo_id: renderartist/Technically-Color-Z-Image-Turbo
+    adapter_name: color
+    scale: 0.4
+    purpose: "Enhanced color/saturation palette"
+
+  - repo_id: wcde/Z-Image-Turbo-DeJPEG-Lora
+    adapter_name: dejpeg
+    scale: 0.3
+    purpose: "JPEG artifact removal / sharpness"
+
+validation:
+  test_prompts:
+    - "cinematic portrait of a woman, golden hour, 85mm f1.4"
+    - "vibrant street photography, tokyo at night, neon lights"
+    - "detailed close-up of a cat's eye, macro photography"
+  expected_test_latency_sec: 3.0
+  min_output_size_gb: 10

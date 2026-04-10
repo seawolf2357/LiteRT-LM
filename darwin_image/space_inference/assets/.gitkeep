@@ -1,0 +1,7 @@
+# Korean font assets directory
+#
+# The Noto Sans KR font is installed system-wide via packages.txt
+# (fonts-noto-cjk). The pipeline code falls back to system font paths
+# if a bundled TTF is not present here.
+#
+# To bundle a specific font, place `NotoSansKR-Bold.ttf` in this directory.

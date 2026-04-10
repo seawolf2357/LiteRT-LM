@@ -1,0 +1,13 @@
+torch==2.5.1
+diffusers>=0.32.0
+transformers>=4.47.0
+accelerate>=1.2.0
+safetensors>=0.4.5
+peft>=0.14.0
+sentencepiece
+protobuf
+Pillow>=10.4.0
+numpy<2.0
+huggingface_hub>=0.27.0
+gradio>=6.11.0
+PyYAML>=6.0
