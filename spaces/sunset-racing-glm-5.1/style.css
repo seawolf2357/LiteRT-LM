@@ -1,0 +1,180 @@
+/* ═══════════════════════════════════════════════════════
+ *  SUNSET RACING — base styles
+ *  Runtime UI (pause menu, touch buttons, toasts, attract
+ *  overlay, countdown) is styled by js/game.js via injected
+ *  <style> tags. This file holds the static surfaces only.
+ * ═══════════════════════════════════════════════════════ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle cinematic vignette — tightens the frame, adds depth
+   behind the HUD without affecting the 3D canvas brightness. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 55%,
+    rgba(0, 0, 0, 0.38) 100%
+  );
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* HUD canvases are positioned by js/hud.js via cssText;
+   we only hint the browser about scaling. */
+#hud-canvas,
+#hud-overlay {
+  image-rendering: auto;
+}
+
+/* Keyboard hint strip at the bottom of the screen. */
+#controls {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  color: #fff;
+  opacity: 0.45;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  letter-spacing: 3px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  z-index: 140;
+  transition: opacity 0.3s ease;
+}
+
+#controls:hover { opacity: 0.75; }
+
+/* Hide the keyboard hint when running on a touch device — the
+   on-screen touch buttons serve as the control reference there,
+   and the hint string otherwise collides with them. */
+@media (hover: none) and (pointer: coarse) {
+  #controls { display: none; }
+}
+
+/* On narrow viewports the hint wraps messily; shrink it. */
+@media (max-width: 720px) {
+  #controls {
+    font-size: 10px;
+    letter-spacing: 2px;
+    white-space: normal;
+    max-width: 92vw;
+    text-align: center;
+  }
+}
+
+/* Scale the bottom-left HUD gauge down on phones so it no longer
+   overlaps the on-screen steering buttons. */
+@media (max-width: 640px) {
+  #hud-canvas {
+    transform: scale(0.68);
+    transform-origin: bottom left;
+  }
+  #hud-overlay {
+    transform: scale(0.85);
+    transform-origin: top left;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+ *  Loading veil — shown while game.js initializes
+ *  (three.js modules, scenery generation). Faded out on
+ *  the first animation frame by js/game.js.
+ * ═══════════════════════════════════════════════════════ */
+#loading-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  pointer-events: auto;
+  background:
+    radial-gradient(ellipse at 50% 120%, #ff6a3d 0%, #8a1e3c 32%, #2a0a2a 62%, #050510 100%);
+  font-family: 'Orbitron', sans-serif;
+  color: #fff;
+  opacity: 1;
+  transition: opacity 0.6s ease-out;
+}
+
+#loading-veil.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#loading-veil .lv-title {
+  font-weight: 900;
+  font-size: clamp(32px, 9vw, 68px);
+  letter-spacing: clamp(4px, 1vw, 10px);
+  text-shadow:
+    0 0 40px rgba(255, 160, 80, 0.8),
+    0 4px 24px rgba(0, 0, 0, 0.9);
+  text-align: center;
+}
+
+#loading-veil .lv-sub {
+  font-weight: 700;
+  font-size: clamp(11px, 2vw, 14px);
+  letter-spacing: 4px;
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+#loading-veil .lv-dots {
+  display: flex;
+  gap: 10px;
+}
+#loading-veil .lv-dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+  animation: lvDot 1.1s ease-in-out infinite;
+}
+#loading-veil .lv-dots span:nth-child(2) { animation-delay: 0.15s; }
+#loading-veil .lv-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes lvDot {
+  0%, 100% { transform: translateY(0); opacity: 0.35; }
+  50%      { transform: translateY(-8px); opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════════════
+ *  Gold-toast keyframe for the "NEW BEST LAP!" celebration.
+ *  The toast element gets the .toast-gold class applied in
+ *  js/game.js, which pulls this animation in.
+ * ═══════════════════════════════════════════════════════ */
+@keyframes toastGoldIn {
+  0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+  22%  { transform: translate(-50%, -50%) scale(1.18); opacity: 1; }
+  40%  { transform: translate(-50%, -50%) scale(1.00); opacity: 1; }
+  85%  { opacity: 1; }
+  100% { opacity: 0; }
+}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🏎️ Car Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="js/game.js"></script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <canvas id="minimap" width="160" height="160"></canvas>
+  <div id="controls">WASD/ARROWS · SPACE drift · SHIFT nitro · C camera · G ghost · P/ESC pause · F fullscreen · R restart</div>
+  <div id="loading-veil" role="status" aria-live="polite">
+    <div class="lv-title">SUNSET RACING</div>
+    <div class="lv-sub">LOADING TRACK</div>
+    <div class="lv-dots"><span></span><span></span><span></span></div>
+  </div>
+</body>
+</html>
