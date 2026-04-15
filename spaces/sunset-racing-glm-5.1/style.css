@@ -87,8 +87,11 @@ body::after {
   }
 }
 
-/* Scale the bottom-left HUD gauge down on phones so it no longer
-   overlaps the on-screen steering buttons. */
+/* Scale the HUD gauge, top overlay, and minimap down on phones so
+   they no longer overlap the on-screen steering / pedal / nitro
+   touch buttons. The minimap is bottom-right at 180×180 and the
+   right-cluster touch buttons live right: 24-212px × bottom: 100-252px,
+   so without this rule they collide directly. */
 @media (max-width: 640px) {
   #hud-canvas {
     transform: scale(0.68);
@@ -97,6 +100,11 @@ body::after {
   #hud-overlay {
     transform: scale(0.85);
     transform-origin: top left;
+  }
+  #minimap {
+    transform: scale(0.62);
+    transform-origin: bottom right;
+    opacity: 0.7;
   }
 }
 
@@ -177,4 +185,39 @@ body::after {
   40%  { transform: translate(-50%, -50%) scale(1.00); opacity: 1; }
   85%  { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════════
+ *  Countdown pop-in — applied via inline animation from
+ *  js/game.js each time the countdown digit changes so the
+ *  "3 → 2 → 1 → GO!" beats actually punch into view instead
+ *  of just color-swapping. The transform is compounded with
+ *  the existing `translate(-50%, -50%)` set on countdownEl.
+ * ═══════════════════════════════════════════════════════ */
+@keyframes countdownPop {
+  0%   { transform: translate(-50%, -50%) scale(0.35); opacity: 0; filter: blur(6px); }
+  35%  { transform: translate(-50%, -50%) scale(1.18); opacity: 1; filter: blur(0); }
+  55%  { transform: translate(-50%, -50%) scale(0.96); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.00); opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════════════
+ *  Accessibility: honor the user's "reduce motion" OS pref.
+ *  We keep state transitions (fades) but strip the bouncy
+ *  keyframes and vignette pulse so motion-sensitive players
+ *  still get a usable, polished HUD.
+ * ═══════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.08s !important;
+  }
+  #loading-veil .lv-dots span {
+    animation: none !important;
+    opacity: 0.7 !important;
+    transform: none !important;
+  }
 }

@@ -486,6 +486,19 @@ countdownEl.style.cssText = `
 `;
 document.body.appendChild(countdownEl);
 
+let _lastCountdownText = '';
+function setCountdown(text, color) {
+  countdownEl.style.opacity = '1';
+  countdownEl.style.color = color;
+  if (_lastCountdownText === text) return; // same digit — don't retrigger
+  _lastCountdownText = text;
+  countdownEl.textContent = text;
+  // Restart the pop keyframe by toggling the animation property.
+  countdownEl.style.animation = 'none';
+  void countdownEl.offsetWidth; // force reflow
+  countdownEl.style.animation = 'countdownPop 0.55s cubic-bezier(0.2, 1.2, 0.4, 1) forwards';
+}
+
 // ══ RESULTS OVERLAY ══
 const resultsEl = document.createElement('div');
 resultsEl.id = 'results-overlay';
@@ -1021,23 +1034,15 @@ function update() {
   if (raceState === 'countdown') {
     const countdownElapsed = elapsed - countdownStartTime;
 
-    // Show 3, 2, 1, GO
+    // Show 3, 2, 1, GO (each digit pops in via countdownPop keyframe)
     if (countdownElapsed < 1) {
-      countdownEl.textContent = '3';
-      countdownEl.style.color = '#ff3333';
-      countdownEl.style.opacity = '1';
+      setCountdown('3', '#ff3333');
     } else if (countdownElapsed < 2) {
-      countdownEl.textContent = '2';
-      countdownEl.style.color = '#ffaa00';
-      countdownEl.style.opacity = '1';
+      setCountdown('2', '#ffaa00');
     } else if (countdownElapsed < 3) {
-      countdownEl.textContent = '1';
-      countdownEl.style.color = '#00ff66';
-      countdownEl.style.opacity = '1';
+      setCountdown('1', '#00ff66');
     } else if (countdownElapsed < 3.8) {
-      countdownEl.textContent = 'GO!';
-      countdownEl.style.color = '#ffffff';
-      countdownEl.style.opacity = '1';
+      setCountdown('GO!', '#ffffff');
     } else {
       countdownEl.style.opacity = '0';
     }
