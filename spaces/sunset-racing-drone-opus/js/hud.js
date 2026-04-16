@@ -239,6 +239,54 @@ export function createHUD() {
     gctx.fillText(`${Math.round(altitude)}m`, aX, aBarY + aBarH + 14);
   }
 
+  // ── Next-gate direction arrow (centred on screen) ─────
+  // Drawn into the overlay canvas so it composites cleanly
+  // above the 3D scene. Angle: 0 = dead ahead, + = right.
+  function drawGateArrow(angle, distance, w) {
+    if (angle === null || angle === undefined) return;
+
+    const cx = w / 2;
+    const cy = 104; // just below the time readout
+
+    // Clamp to half-screen range so the arrow always points
+    // somewhere sensible.
+    const clamped = Math.max(-Math.PI, Math.min(Math.PI, angle));
+
+    // If the gate is close to dead-ahead, show a centered triangle.
+    // If it's off to the side, show a directional chevron.
+    octx.save();
+    octx.translate(cx, cy);
+    octx.rotate(clamped);
+
+    // Pulse scale with a little "urgency" when distance is small.
+    const near = distance !== null && distance < 30;
+    const pulse = near ? 1 + 0.1 * Math.sin(performance.now() * 0.012) : 1;
+
+    octx.shadowColor = 'rgba(0, 234, 255, 0.8)';
+    octx.shadowBlur = 14;
+    octx.fillStyle = '#00eaff';
+    octx.beginPath();
+    // Arrow shape: elongated triangle pointing up (= toward gate)
+    const s = 18 * pulse;
+    octx.moveTo(0, -s * 1.3);
+    octx.lineTo(s, s * 0.7);
+    octx.lineTo(0, s * 0.2);
+    octx.lineTo(-s, s * 0.7);
+    octx.closePath();
+    octx.fill();
+    octx.restore();
+
+    // Distance readout just below the arrow
+    if (distance !== null) {
+      octx.textAlign = 'center';
+      octx.font = '700 12px Orbitron, sans-serif';
+      octx.fillStyle = 'rgba(0, 234, 255, 0.95)';
+      octx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+      octx.shadowBlur = 6;
+      octx.fillText(`${Math.round(distance)}m`, cx, cy + 32);
+    }
+  }
+
   // ── Top overlay: lap / gate / time / delta ─────────────
   function drawOverlay(data) {
     const w = overlay.width;
@@ -291,6 +339,9 @@ export function createHUD() {
       octx.fillText('NO BEST YET', w - 22, 40);
     }
 
+    // Next-gate arrow (points toward upcoming gate)
+    drawGateArrow(data.gateArrowAngle, data.gateDistance, w);
+
     // Off-track / reset warning (flashing)
     if (data.offCourseFlash) {
       const flash = Math.sin(performance.now() * 0.02) > 0;
@@ -315,7 +366,7 @@ export function createHUD() {
   // ── Main entry: called by game.js every frame ──────────
   function draw({ speed, throttle, altitude, pitch, roll, lap, totalLaps,
                   gateIdx, totalGates, currentLapTime, bestLapTime,
-                  deltaVsBest, offCourseFlash }) {
+                  deltaVsBest, offCourseFlash, gateArrowAngle, gateDistance }) {
     smoothSpeed += (speed - smoothSpeed) * 0.18;
     smoothAlt   += (altitude - smoothAlt) * 0.3;
     drawAttitude(pitch, roll);
@@ -323,6 +374,7 @@ export function createHUD() {
     drawOverlay({
       lap, totalLaps, gateIdx, totalGates,
       currentLapTime, bestLapTime, deltaVsBest, offCourseFlash,
+      gateArrowAngle, gateDistance,
     });
   }
 

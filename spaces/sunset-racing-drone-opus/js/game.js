@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import {
   TOTAL_LAPS, FOV_FPV, FOV_CHASE, CAMERA_TILT,
   CHASE_DIST, CHASE_HEIGHT, OFF_COURSE_RADIUS, RESET_HOVER_Y,
-  clamp, smoothDamp,
+  HOVER_THROTTLE, clamp, smoothDamp,
 } from './config.js';
 import { createDrone }        from './drone-physics.js';
 import { createDroneMesh }    from './drone-mesh.js';
@@ -28,22 +28,30 @@ renderer.setSize(window.innerWidth, window.innerHeight, false);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.25;
 
 const scene = new THREE.Scene();
+// Start with chase FOV since chase is the default camera now.
 const camera = new THREE.PerspectiveCamera(
-  FOV_FPV, window.innerWidth / window.innerHeight, 0.1, 1200
+  FOV_CHASE, window.innerWidth / window.innerHeight, 0.1, 2000
 );
-camera.position.set(0, 8, 50);
 
 // ── World + drone + track ───────────────────────────────
 const env = createEnvironment(scene, renderer);
 const droneMesh = createDroneMesh();
 scene.add(droneMesh.group);
 
-const spawnPos = new THREE.Vector3(0, 6, 56);
-const drone = createDrone(spawnPos, Math.PI); // facing -Z (into the course)
+// Spawn matches gate-track's SPAWN_POS so orientation math agrees.
+// Heading = 0 means drone faces -Z (toward the first gate).
+const spawnPos = new THREE.Vector3(0, 8, 60);
+const drone = createDrone(spawnPos, 0, HOVER_THROTTLE);
 const track = createGateTrack(scene);
+
+// Park the camera behind the drone at startup so the very
+// first frame (before the loop runs updateCamera) composes
+// a sensible shot instead of a random origin view.
+camera.position.set(spawnPos.x, spawnPos.y + CHASE_HEIGHT, spawnPos.z + CHASE_DIST);
+camera.lookAt(spawnPos.x, spawnPos.y + 0.5, spawnPos.z - 6);
 
 // ── HUD + sound ─────────────────────────────────────────
 const hud = createHUD();
@@ -58,10 +66,11 @@ const gameState = {
   currentLapStartTime: 0,
   bestLapTime: null,
   lastLapTime: null,
-  lapSplits: [], // times at which each gate was passed on the best lap
+  lapSplits: [],
   currentSplits: [],
   finishTime: null,
-  cameraMode: 'fpv', // 'fpv' | 'chase'
+  // Chase camera is the default — FPV is disorienting for new players.
+  cameraMode: 'chase', // 'chase' | 'fpv'
   offCourseFlash: 0,
 };
 
@@ -73,7 +82,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR') resetRace();
   if (e.code === 'Tab') {
     e.preventDefault();
-    gameState.cameraMode = gameState.cameraMode === 'fpv' ? 'chase' : 'fpv';
+    gameState.cameraMode = gameState.cameraMode === 'chase' ? 'fpv' : 'chase';
     camera.fov = gameState.cameraMode === 'fpv' ? FOV_FPV : FOV_CHASE;
     camera.updateProjectionMatrix();
   }
@@ -185,37 +194,72 @@ function sampleInput() {
 }
 
 // ── Camera follow ───────────────────────────────────────
-const cameraOffset = new THREE.Vector3();
-const cameraLookAt = new THREE.Vector3();
-const tiltQuat     = new THREE.Quaternion().setFromAxisAngle(
-  new THREE.Vector3(1, 0, 0), -CAMERA_TILT
-);
-const fpvLocalOffset = new THREE.Vector3(0, 0.2, 0);
+// Both FPV and chase modes derive a *yaw-only* heading from
+// the drone so the camera horizon stays stable regardless of
+// how hard the drone is rolling. This is the single biggest
+// "FPV comfort" fix — raw quaternion coupling makes the world
+// spin when the drone banks.
+const _camFwd     = new THREE.Vector3();
+const _camDesired = new THREE.Vector3();
+const _camLookAt  = new THREE.Vector3();
+const _camUp      = new THREE.Vector3(0, 1, 0);
+
+function getDroneYawForward() {
+  // Project the drone's local -Z onto the XZ plane and renormalize.
+  _camFwd.set(0, 0, -1).applyQuaternion(drone.state.quaternion);
+  _camFwd.y = 0;
+  if (_camFwd.lengthSq() < 0.001) _camFwd.set(0, 0, -1);
+  return _camFwd.normalize();
+}
 
 function updateCamera(dt) {
-  if (gameState.cameraMode === 'fpv') {
-    // Lock camera to drone with slight forward tilt.
-    cameraOffset.copy(fpvLocalOffset).applyQuaternion(drone.state.quaternion);
-    camera.position.copy(drone.state.position).add(cameraOffset);
-    const targetQuat = drone.state.quaternion.clone().multiply(tiltQuat);
-    camera.quaternion.slerp(targetQuat, 0.35);
+  const fwd = getDroneYawForward();
+
+  if (gameState.cameraMode === 'chase') {
+    // Trail behind the drone on a horizontal plane with a
+    // fixed height offset. Smoothly damped so the cam lags
+    // the drone gracefully instead of snapping.
+    _camDesired.copy(drone.state.position)
+      .addScaledVector(fwd, -CHASE_DIST);
+    _camDesired.y += CHASE_HEIGHT;
+
+    const tau = 0.18;
+    camera.position.x = smoothDamp(camera.position.x, _camDesired.x, tau, dt);
+    camera.position.y = smoothDamp(camera.position.y, _camDesired.y, tau, dt);
+    camera.position.z = smoothDamp(camera.position.z, _camDesired.z, tau, dt);
+
+    // Look slightly ahead of the drone (gives a sense of speed).
+    _camLookAt.copy(drone.state.position)
+      .addScaledVector(fwd, 6)
+      .add(new THREE.Vector3(0, 0.5, 0));
+    camera.up.copy(_camUp);
+    camera.lookAt(_camLookAt);
   } else {
-    // Chase cam: trail behind the drone, look at it.
-    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(drone.state.quaternion);
-    const desired = drone.state.position.clone()
-      .sub(fwd.clone().multiplyScalar(CHASE_DIST))
-      .add(new THREE.Vector3(0, CHASE_HEIGHT, 0));
-    camera.position.x = smoothDamp(camera.position.x, desired.x, 0.12, dt);
-    camera.position.y = smoothDamp(camera.position.y, desired.y, 0.12, dt);
-    camera.position.z = smoothDamp(camera.position.z, desired.z, 0.12, dt);
-    cameraLookAt.copy(drone.state.position).add(fwd.clone().multiplyScalar(4));
-    camera.lookAt(cameraLookAt);
+    // Stable FPV — camera sits at drone position + tiny offset,
+    // looks along the drone's *yaw-only* forward vector with a
+    // slight downward pitch from the pitch component. No roll.
+    camera.position.copy(drone.state.position);
+    camera.position.y += 0.35;
+
+    // Extract pitch from the full quaternion so the camera still
+    // pitches up/down with the drone (useful for climbing/diving).
+    const fullFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(drone.state.quaternion);
+    const pitch = Math.asin(clamp(fullFwd.y, -1, 1));
+    const pitchFwd = new THREE.Vector3(
+      fwd.x * Math.cos(pitch * 0.6),
+      Math.sin(pitch * 0.6) - CAMERA_TILT,
+      fwd.z * Math.cos(pitch * 0.6)
+    ).normalize();
+
+    _camLookAt.copy(drone.state.position).addScaledVector(pitchFwd, 10);
+    camera.up.copy(_camUp);
+    camera.lookAt(_camLookAt);
   }
 }
 
 // ── Race logic ──────────────────────────────────────────
 function resetRace() {
-  drone.resetToHover(spawnPos, Math.PI);
+  drone.resetToHover(spawnPos, 0, HOVER_THROTTLE);
   track.resetForLap();
   gameState.phase = 'countdown';
   gameState.countdown = 3.2;
@@ -227,15 +271,17 @@ function resetRace() {
 }
 
 function resetToCheckpoint() {
-  // Snap back to just before the next gate with a small offset.
+  // Snap back to 14m *in front* of the next gate (i.e. against the
+  // travel direction) so the drone re-approaches it head-on.
   const next = track.getNextGate();
   if (!next) return;
-  const back = next.normal.clone().multiplyScalar(14);
+  const back = next.forward.clone().multiplyScalar(-14);
   const pos = next.position.clone().add(back);
   pos.y = Math.max(pos.y, RESET_HOVER_Y);
-  // Heading = toward gate
-  const heading = Math.atan2(-next.normal.x, -next.normal.z);
-  drone.resetToHover(pos, heading);
+  // Heading such that drone faces along the gate's travel direction.
+  // forward = (-sin h, 0, -cos h)  =>  h = atan2(-forward.x, -forward.z)
+  const heading = Math.atan2(-next.forward.x, -next.forward.z);
+  drone.resetToHover(pos, heading, HOVER_THROTTLE);
   gameState.offCourseFlash = 1.5;
 }
 
@@ -389,7 +435,10 @@ function loop() {
   if (dt > 0.1) dt = 0.1; // cap after tab-switch
   accumulator += dt;
 
-  // Countdown phase
+  // Countdown phase — physics paused, but we still need to
+  // sync the visual mesh + drive the camera so the player
+  // sees the drone sitting on the line instead of an empty
+  // origin shot.
   if (gameState.phase === 'countdown') {
     gameState.countdown -= dt;
     updateCountdown();
@@ -399,13 +448,18 @@ function loop() {
       gameState.currentLapStartTime = now;
       sound.start();
     }
-    // Still render the scene behind the countdown.
+    droneMesh.group.position.copy(drone.state.position);
+    droneMesh.group.quaternion.copy(drone.state.quaternion);
+    droneMesh.spinProps(drone.state.propPhase += dt * 12);
+    track.update(drone.state.position, drone.state.position, dt);
+    updateCamera(dt);
     renderer.render(scene, camera);
     return;
   }
 
-  // Pause phase: just draw what we had.
+  // Pause phase: still drive the camera so it doesn't freeze oddly.
   if (gameState.phase === 'paused') {
+    updateCamera(dt);
     renderer.render(scene, camera);
     return;
   }
@@ -454,15 +508,18 @@ function loop() {
   const speed = drone.state.velocity.length();
   sound.update(drone.state.throttle, speed, dt);
 
-  // HUD
-  const euler = new THREE.Euler().setFromQuaternion(drone.state.quaternion, 'YXZ');
-  const pitchRad = euler.x;
-  const rollRad  = euler.z;
+  // HUD — decompose drone orientation into pitch/roll. Use
+  // forward+right vectors instead of Euler extraction which
+  // has gimbal-lock artefacts at high pitch angles.
+  const fwdVec   = new THREE.Vector3(0, 0, -1).applyQuaternion(drone.state.quaternion);
+  const rightVec = new THREE.Vector3(1, 0, 0).applyQuaternion(drone.state.quaternion);
+  const pitchRad = Math.asin(clamp(fwdVec.y, -1, 1));
+  const rollRad  = Math.asin(clamp(rightVec.y, -1, 1));
   const altitude = drone.state.position.y;
   const curLapTime = gameState.phase === 'racing'
     ? now - gameState.currentLapStartTime : 0;
 
-  // Real-time delta vs best: compare current split to best split at same gate index.
+  // Real-time delta vs best.
   let delta = null;
   if (gameState.bestLapTime !== null && gameState.phase === 'racing') {
     const idx = track.getNextGateIndex();
@@ -472,6 +529,26 @@ function loop() {
   }
 
   if (gameState.offCourseFlash > 0) gameState.offCourseFlash -= dt;
+
+  // Next-gate direction arrow: compute the 2D angle from the
+  // drone's yaw-forward to the vector pointing at the next gate.
+  let gateArrowAngle = null;  // radians, 0 = dead ahead, + = right
+  let gateDistance   = null;
+  const nextGate = track.getNextGate();
+  if (nextGate) {
+    const dx = nextGate.position.x - drone.state.position.x;
+    const dz = nextGate.position.z - drone.state.position.z;
+    gateDistance = Math.hypot(dx, dz);
+    // Drone yaw-forward = fwdVec flattened to XZ plane.
+    const fx = fwdVec.x, fz = fwdVec.z;
+    const flen = Math.hypot(fx, fz) || 1;
+    const fnx = fx / flen, fnz = fz / flen;
+    // Angle between drone-forward and gate-direction in world XZ.
+    // Cross-product sign tells us left/right.
+    const dot = (fnx * dx + fnz * dz) / (gateDistance || 1);
+    const cross = (fnx * dz - fnz * dx); // sign only
+    gateArrowAngle = Math.atan2(cross, dot);
+  }
 
   hud.draw({
     speed, throttle: drone.state.throttle, altitude,
@@ -483,6 +560,7 @@ function loop() {
     bestLapTime: gameState.bestLapTime,
     deltaVsBest: delta,
     offCourseFlash: gameState.offCourseFlash > 0,
+    gateArrowAngle, gateDistance,
   });
 
   renderer.render(scene, camera);

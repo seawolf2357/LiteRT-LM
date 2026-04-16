@@ -10,7 +10,8 @@ import {
 
 export function createEnvironment(scene, renderer) {
   // ── Background fog for depth cues ─────────────────────
-  scene.fog = new THREE.Fog(0x3a1048, FOG_NEAR, FOG_FAR);
+  // Warm sunset tint so distant geometry blends with sky.
+  scene.fog = new THREE.Fog(0x5a1838, FOG_NEAR, FOG_FAR);
 
   // ── Sky dome: vertical sunset gradient on the inside of
   //    a large inverted sphere (shader-free, works on HF
@@ -116,10 +117,16 @@ export function createEnvironment(scene, renderer) {
   scene.add(mountainGroup);
 
   // ── Lighting ──────────────────────────────────────────
-  const ambient = new THREE.AmbientLight(0xffb98a, 0.55);
+  // Brighter ambient so drone + gates stay readable even when
+  // the sunset casts long shadows across them.
+  const ambient = new THREE.AmbientLight(0xffc99a, 1.05);
   scene.add(ambient);
 
-  const sun = new THREE.DirectionalLight(0xffd2a0, 1.35);
+  // Hemispheric fill — sky-to-ground color bleed for free contrast.
+  const hemi = new THREE.HemisphereLight(0xffd0a0, 0x2a0a22, 0.6);
+  scene.add(hemi);
+
+  const sun = new THREE.DirectionalLight(0xffe2b0, 1.75);
   sun.position.set(120, 90, 200);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
