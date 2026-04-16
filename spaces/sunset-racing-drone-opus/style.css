@@ -1,0 +1,212 @@
+/* ═══════════════════════════════════════════════════════
+ *  SUNSET RACING — DRONE — base styles
+ *  HUD (attitude indicator, altitude, throttle, etc.) is
+ *  drawn into a canvas by js/hud.js. Runtime UI (pause
+ *  menu, touch sticks, toasts) is styled via js-injected
+ *  <style> tags inside js/game.js. This file holds the
+ *  static surfaces only.
+ * ═══════════════════════════════════════════════════════ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  -webkit-font-smoothing: antialiased;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+/* Cinematic vignette sitting above the 3D canvas. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 52%,
+    rgba(0, 0, 0, 0.42) 100%
+  );
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* HUD canvases are positioned by js/hud.js via cssText;
+   we only hint the browser about scaling. */
+#hud-canvas,
+#hud-overlay,
+#attitude-canvas {
+  image-rendering: auto;
+}
+
+/* Keyboard hint strip at the bottom of the screen. */
+#controls {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  color: #fff;
+  opacity: 0.45;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  letter-spacing: 3px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  z-index: 140;
+  transition: opacity 0.3s ease;
+}
+#controls:hover { opacity: 0.75; }
+
+@media (hover: none) and (pointer: coarse) {
+  #controls { display: none; }
+}
+
+@media (max-width: 820px) {
+  #controls {
+    font-size: 9px;
+    letter-spacing: 2px;
+    white-space: normal;
+    max-width: 92vw;
+    text-align: center;
+  }
+}
+
+/* Scale HUD elements on narrow viewports so they don't
+   fight with the on-screen virtual sticks. */
+@media (max-width: 720px) {
+  #hud-canvas {
+    transform: scale(0.72);
+    transform-origin: bottom left;
+  }
+  #hud-overlay {
+    transform: scale(0.82);
+    transform-origin: top left;
+  }
+  #attitude-canvas {
+    transform: scale(0.78);
+    transform-origin: top center;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+ *  Loading veil — shown while game.js initializes
+ *  (three.js module + world build). Faded out on the
+ *  first animation frame by js/game.js.
+ * ═══════════════════════════════════════════════════════ */
+#loading-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  pointer-events: auto;
+  background:
+    radial-gradient(ellipse at 50% 120%, #ff6a3d 0%, #a11f4c 28%, #3a1048 58%, #050512 100%);
+  font-family: 'Orbitron', sans-serif;
+  color: #fff;
+  opacity: 1;
+  transition: opacity 0.7s ease-out;
+}
+
+#loading-veil.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#loading-veil .lv-title {
+  font-weight: 900;
+  font-size: clamp(32px, 9vw, 68px);
+  letter-spacing: clamp(4px, 1vw, 10px);
+  text-shadow:
+    0 0 40px rgba(255, 160, 80, 0.8),
+    0 4px 24px rgba(0, 0, 0, 0.9);
+  text-align: center;
+}
+
+#loading-veil .lv-sub {
+  font-weight: 700;
+  font-size: clamp(11px, 2vw, 14px);
+  letter-spacing: 4px;
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+#loading-veil .lv-dots {
+  display: flex;
+  gap: 10px;
+}
+#loading-veil .lv-dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+  animation: lvDot 1.1s ease-in-out infinite;
+}
+#loading-veil .lv-dots span:nth-child(2) { animation-delay: 0.15s; }
+#loading-veil .lv-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes lvDot {
+  0%, 100% { transform: translateY(0); opacity: 0.35; }
+  50%      { transform: translateY(-8px); opacity: 1; }
+}
+
+/* Gold-toast keyframe for the "NEW BEST LAP!" celebration. */
+@keyframes toastGoldIn {
+  0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+  22%  { transform: translate(-50%, -50%) scale(1.18); opacity: 1; }
+  40%  { transform: translate(-50%, -50%) scale(1.00); opacity: 1; }
+  85%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Countdown pop-in — applied via inline animation from
+   js/game.js each time the countdown digit changes. */
+@keyframes countdownPop {
+  0%   { transform: translate(-50%, -50%) scale(0.35); opacity: 0; filter: blur(6px); }
+  35%  { transform: translate(-50%, -50%) scale(1.18); opacity: 1; filter: blur(0); }
+  55%  { transform: translate(-50%, -50%) scale(0.96); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.00); opacity: 1; }
+}
+
+/* Gate pass flash — expands from the center, fades out.
+   Triggered by js/gate-track.js on clean pass. */
+@keyframes gatePassFlash {
+  0%   { opacity: 0.75; transform: translate(-50%, -50%) scale(0.6); }
+  100% { opacity: 0;    transform: translate(-50%, -50%) scale(1.8); }
+}
+
+/* Reduced-motion accessibility: keep state transitions
+   readable but strip bouncy keyframes. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.08s !important;
+  }
+  #loading-veil .lv-dots span {
+    animation: none !important;
+    opacity: 0.7 !important;
+    transform: none !important;
+  }
+}
